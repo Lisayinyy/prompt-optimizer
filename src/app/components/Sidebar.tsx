@@ -297,14 +297,20 @@ export default function Sidebar() {
   }, []);
 
   const handleGoogleSignIn = async () => {
-    await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: typeof chrome !== "undefined" && chrome?.runtime?.getURL
-          ? chrome.runtime.getURL("extension/index.html")
-          : window.location.href,
+        skipBrowserRedirect: true,
       },
     });
+    if (data?.url) {
+      // Chrome 插件环境：用新标签页打开登录
+      if (typeof chrome !== "undefined" && chrome?.tabs?.create) {
+        chrome.tabs.create({ url: data.url });
+      } else {
+        window.open(data.url, "_blank");
+      }
+    }
   };
 
   const handleSignOut = async () => {
