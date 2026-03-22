@@ -40,17 +40,29 @@
         "https://chat.mistral.ai/*",
         "https://www.perplexity.ai/*",
         "https://grok.com/*",
-        "https://copilot.microsoft.com/*"
+        "https://copilot.microsoft.com/*",
+        "https://agent.minimax.io/*",
+        "https://chat.z.ai/*",
+        "https://qwen.ai/*"
       ],
-      "js": ["content.js"],
-      "css": ["content.css"],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "content.css"
+      ],
       "run_at": "document_idle"
     }
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
-  "permissions": ["storage", "sidePanel", "activeTab", "scripting"],
+  "permissions": [
+    "storage",
+    "sidePanel",
+    "activeTab",
+    "scripting"
+  ],
   "host_permissions": [
     "https://prompt-optimizer-api.prompt-optimizer.workers.dev/*",
     "https://chatgpt.com/*",
@@ -69,6 +81,9 @@
     "https://chat.mistral.ai/*",
     "https://www.perplexity.ai/*",
     "https://grok.com/*",
-    "https://copilot.microsoft.com/*"
+    "https://copilot.microsoft.com/*",
+    "https://agent.minimax.io/*",
+    "https://chat.z.ai/*",
+    "https://qwen.ai/*"
   ]
 }

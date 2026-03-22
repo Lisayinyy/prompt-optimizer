@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "../../lib/supabase";
+import type { User } from "@supabase/supabase-js";
 import {
   Sparkles,
   Copy,
@@ -279,6 +281,37 @@ export default function Sidebar() {
   const [addExamples, setAddExamples] = useState(false);
   const [autoOptimize, setAutoOptimize] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState<User | null>(null);
+
+  // 检查登录状态
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsLoggedIn(!!session);
+      setUser(session?.user ?? null);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsLoggedIn(!!session);
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleGoogleSignIn = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: typeof chrome !== "undefined" && chrome?.runtime?.getURL
+          ? chrome.runtime.getURL("extension/index.html")
+          : window.location.href,
+      },
+    });
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setIsLoggedIn(false);
+    setUser(null);
+  };
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
 
   const t = (key: string) => i18n[lang][key] ?? key;
@@ -1010,7 +1043,7 @@ export default function Sidebar() {
                     {t("loginForInsightsDesc")}
                   </p>
                   <button
-                    onClick={() => setIsLoggedIn(true)}
+                    onClick={handleGoogleSignIn}
                     className="flex items-center gap-2 bg-[#18181b] text-white px-6 py-2.5 rounded-lg text-[13px] hover:bg-[#2a2a30] active:scale-[0.98] transition-all shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
                     style={{ fontWeight: 500 }}
                   >
@@ -1339,7 +1372,7 @@ export default function Sidebar() {
 
                   {/* Sign out link */}
                   <button
-                    onClick={() => setIsLoggedIn(false)}
+                    onClick={handleSignOut}
                     className="flex items-center justify-center gap-1.5 py-2 text-[12px] text-[#c0c0cc] hover:text-[#8b8b9e] transition-colors"
                   >
                     <LogOut size={12} />
@@ -1455,15 +1488,15 @@ export default function Sidebar() {
                       </div>
                       <div>
                         <p className="text-[13px] text-[#18181b]" style={{ fontWeight: 500 }}>
-                          Alex Chen
+                          {user?.user_metadata?.full_name || user?.email || "User"}
                         </p>
                         <p className="text-[11px] text-[#8b8b9e]">
-                          alex@example.com
+                          {user?.email || ""}
                         </p>
                       </div>
                     </div>
                     <button
-                      onClick={() => setIsLoggedIn(false)}
+                      onClick={handleSignOut}
                       className="text-[11.5px] text-[#8b8b9e] hover:text-[#5a5a72] flex items-center gap-1 transition-colors"
                     >
                       <LogOut size={11} />
@@ -1472,7 +1505,7 @@ export default function Sidebar() {
                   </div>
                 ) : (
                   <button
-                    onClick={() => setIsLoggedIn(true)}
+                    onClick={handleGoogleSignIn}
                     className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#e8e8ec] rounded-lg text-[13px] text-[#5a5a72] hover:text-[#18181b] hover:border-[#c8c8d4] transition-colors"
                   >
                     <LogIn size={13} />
