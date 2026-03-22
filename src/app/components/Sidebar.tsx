@@ -195,6 +195,17 @@ const AI_TARGETS = [
   { id: "chatgpt", name: "ChatGPT", icon: MessageSquare },
   { id: "claude", name: "Claude", icon: Sparkles },
   { id: "kimi", name: "Kimi", icon: Zap },
+  { id: "deepseek", name: "DeepSeek", icon: Search },
+  { id: "gemini", name: "Gemini", icon: Brain },
+  { id: "doubao", name: "豆包", icon: MessageSquare },
+  { id: "tongyi", name: "通义千问", icon: MessageSquare },
+  { id: "hailuo", name: "海螺AI", icon: Sparkles },
+  { id: "minimax", name: "MiniMax", icon: Zap },
+  { id: "wenxin", name: "文心一言", icon: PenTool },
+  { id: "zhipu", name: "智谱清言", icon: Brain },
+  { id: "llama", name: "Llama", icon: Code },
+  { id: "grok", name: "Grok", icon: Zap },
+  { id: "perplexity", name: "Perplexity", icon: Search },
 ];
 
 const LANGUAGES: { code: Lang; label: string; flag: string }[] = [
@@ -392,41 +403,111 @@ export default function Sidebar() {
     }
   };
 
+  const [fillStatus, setFillStatus] = useState("");
+
   const handleFillToChat = async () => {
     if (!optimizedText) return;
     try {
       if (typeof chrome !== "undefined" && chrome?.tabs && chrome?.scripting) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id) return;
-        await chrome.scripting.executeScript({
+        if (!tab?.id) {
+          // 没有 tab，退回复制
+          await navigator.clipboard.writeText(optimizedText);
+          setFillStatus("copied");
+          setTimeout(() => setFillStatus(""), 2000);
+          return;
+        }
+        const results = await chrome.scripting.executeScript({
           target: { tabId: tab.id },
           func: (text: string) => {
-            const selectors = ["textarea", "div[contenteditable='true']", "[role='textbox']", "#prompt-textarea", ".ProseMirror"];
+            // 按优先级尝试各种输入框选择器
+            const selectors = [
+              "#prompt-textarea",                          // ChatGPT
+              "div.ProseMirror[contenteditable='true']",   // Claude
+              "div[contenteditable='true'][spellcheck]",   // Kimi
+              "div[contenteditable='true']",               // 通用 contenteditable
+              "textarea[placeholder]",                     // 通用 textarea
+              "textarea",                                  // 兜底 textarea
+              "[role='textbox']",                          // ARIA textbox
+            ];
+
             let input: HTMLElement | null = null;
             for (const sel of selectors) {
-              const el = document.querySelector<HTMLElement>(sel);
-              if (el && el.offsetHeight > 0) { input = el; break; }
+              const els = document.querySelectorAll<HTMLElement>(sel);
+              for (const el of els) {
+                if (el.offsetHeight > 0 && el.offsetWidth > 0) {
+                  input = el;
+                  break;
+                }
+              }
+              if (input) break;
             }
-            if (!input) { alert("未找到对话输入框"); return; }
+
+            if (!input) return "not_found";
+
             input.focus();
-            if (input instanceof HTMLTextAreaElement) {
-              const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+
+            if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
+              const proto = input instanceof HTMLTextAreaElement
+                ? HTMLTextAreaElement.prototype
+                : HTMLInputElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
               if (setter) setter.call(input, text);
               else input.value = text;
               input.dispatchEvent(new Event("input", { bubbles: true }));
+              input.dispatchEvent(new Event("change", { bubbles: true }));
             } else {
-              input.innerHTML = "";
-              document.execCommand("selectAll", false, undefined);
+              // contenteditable
+              input.focus();
+              input.textContent = "";
+
+              // 方法1: execCommand
+              const sel = window.getSelection();
+              const range = document.createRange();
+              range.selectNodeContents(input);
+              sel?.removeAllRanges();
+              sel?.addRange(range);
               document.execCommand("insertText", false, text);
-              input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+
+              // 方法2: 直接设置（兜底）
+              if (!input.textContent || input.textContent.trim() === "") {
+                input.textContent = text;
+              }
+
+              // 触发事件
+              input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
+              input.dispatchEvent(new Event("change", { bubbles: true }));
             }
+
+            return "ok";
           },
           args: [optimizedText],
         });
+
+        const result = results?.[0]?.result;
+        if (result === "ok") {
+          setFillStatus("filled");
+        } else {
+          // 填入失败，退回复制到剪贴板
+          await navigator.clipboard.writeText(optimizedText);
+          setFillStatus("copied");
+        }
+        setTimeout(() => setFillStatus(""), 2000);
       } else {
         await navigator.clipboard.writeText(optimizedText);
+        setFillStatus("copied");
+        setTimeout(() => setFillStatus(""), 2000);
       }
-    } catch {}
+    } catch (err) {
+      // 最终兜底：复制到剪贴板
+      try {
+        await navigator.clipboard.writeText(optimizedText);
+        setFillStatus("copied");
+      } catch {
+        setFillStatus("error");
+      }
+      setTimeout(() => setFillStatus(""), 2000);
+    }
   };
 
   const handleCopy = (text?: string) => {
@@ -733,10 +814,20 @@ export default function Sidebar() {
                       <div className="flex items-center gap-1.5">
                         <button
                           onClick={handleFillToChat}
-                          className="flex items-center gap-1 text-[11px] text-white bg-[#18181b] hover:bg-[#2a2a30] px-2.5 py-1 rounded-md transition-colors"
+                          className={`flex items-center gap-1 text-[11px] text-white px-2.5 py-1 rounded-md transition-colors ${
+                            fillStatus === "filled" ? "bg-emerald-500" :
+                            fillStatus === "copied" ? "bg-blue-500" :
+                            fillStatus === "error" ? "bg-red-500" :
+                            "bg-[#18181b] hover:bg-[#2a2a30]"
+                          }`}
                         >
-                          <ArrowRight size={10} />
-                          {lang === "zh" ? "填入对话框" : "Fill Chat"}
+                          {fillStatus === "filled" ? (
+                            <><Check size={10} />{lang === "zh" ? "已填入" : "Filled"}</>
+                          ) : fillStatus === "copied" ? (
+                            <><Check size={10} />{lang === "zh" ? "已复制" : "Copied"}</>
+                          ) : (
+                            <><ArrowRight size={10} />{lang === "zh" ? "填入对话框" : "Fill Chat"}</>
+                          )}
                         </button>
                         <button
                           onClick={() => handleCopy()}
