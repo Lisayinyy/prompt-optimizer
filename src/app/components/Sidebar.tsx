@@ -190,22 +190,23 @@ const i18n: Record<Lang, Record<string, string>> = {
 
 const TONES = ["Professional", "Casual", "Academic", "Creative", "Concise"];
 
+// 按 Artificial Analysis Intelligence Index 排序
 const AI_TARGETS = [
   { id: "any", name: "Any AI", icon: Globe },
-  { id: "chatgpt", name: "ChatGPT", icon: MessageSquare },
-  { id: "claude", name: "Claude", icon: Sparkles },
-  { id: "kimi", name: "Kimi", icon: Zap },
-  { id: "deepseek", name: "DeepSeek", icon: Search },
-  { id: "gemini", name: "Gemini", icon: Brain },
-  { id: "doubao", name: "豆包", icon: MessageSquare },
-  { id: "tongyi", name: "通义千问", icon: MessageSquare },
-  { id: "hailuo", name: "海螺AI", icon: Sparkles },
-  { id: "minimax", name: "MiniMax", icon: Zap },
-  { id: "wenxin", name: "文心一言", icon: PenTool },
-  { id: "zhipu", name: "智谱清言", icon: Brain },
-  { id: "llama", name: "Llama", icon: Code },
-  { id: "grok", name: "Grok", icon: Zap },
-  { id: "perplexity", name: "Perplexity", icon: Search },
+  { id: "gemini", name: "Gemini", icon: Brain },           // AA #1: 57
+  { id: "chatgpt", name: "ChatGPT", icon: MessageSquare }, // AA #2: 57
+  { id: "claude", name: "Claude", icon: Sparkles },        // AA #3: 53
+  { id: "zhipu", name: "GLM / 智谱", icon: Brain },        // AA #4: 50 (开源第一)
+  { id: "minimax", name: "MiniMax", icon: Zap },           // AA ~50
+  { id: "deepseek", name: "DeepSeek", icon: Search },      // AA ~48
+  { id: "kimi", name: "Kimi", icon: Zap },                 // AA #6: 47
+  { id: "grok", name: "Grok", icon: Zap },                 // AA ~46
+  { id: "tongyi", name: "Qwen / 通义", icon: MessageSquare }, // AA #7: 45
+  { id: "mistral", name: "Mistral", icon: Sparkles },      // AA ~44
+  { id: "perplexity", name: "Perplexity", icon: Search },  // 搜索增强
+  { id: "copilot", name: "Copilot", icon: Code },          // Microsoft
+  { id: "doubao", name: "豆包", icon: MessageSquare },      // 字节跳动
+  { id: "wenxin", name: "文心一言", icon: PenTool },         // 百度
 ];
 
 const LANGUAGES: { code: Lang; label: string; flag: string }[] = [
