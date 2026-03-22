@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build && cp manifest.json background.js content.js content.css dist/ && cp -r icons dist/",
+    "build": "vite build && sed -i '' 's/ crossorigin//g' dist/index.html && sed -i '' 's/ type=\"module\"//g' dist/index.html && cp manifest.json background.js content.js content.css dist/ && cp -r icons dist/",
     "dev": "vite"
   },
   "dependencies": {
