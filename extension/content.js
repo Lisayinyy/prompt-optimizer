@@ -11,8 +11,9 @@
   // 输入框选择器（按优先级排列）
   const INPUT_SELECTORS = [
     "#prompt-textarea",                              // ChatGPT
+    "div.chat-input-editor[contenteditable='true']", // Kimi (kimi.com)
     "div.ProseMirror[contenteditable='true']",        // Claude
-    "div[contenteditable='true'][spellcheck]",        // Kimi
+    "div[contenteditable='true'][spellcheck]",        // Kimi (旧域名)
     "div.ql-editor[contenteditable='true']",          // Gemini
     "[role='textbox'][contenteditable='true']",       // 通用 ARIA
     "div[contenteditable='true']",                    // 通用 contenteditable
