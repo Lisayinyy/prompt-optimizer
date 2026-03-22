@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "prompt.ai",
+  "version": "4.2.0",
+  "description": "AI Prompt Optimizer — 让小白也能写出专业 prompt",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    },
+    "default_title": "打开 prompt.ai"
+  },
+  "side_panel": {
+    "default_path": "index.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://chat.openai.com/*",
+        "https://chatgpt.com/*",
+        "https://claude.ai/*",
+        "https://kimi.moonshot.cn/*",
+        "https://www.doubao.com/*",
+        "https://chat.deepseek.com/*",
+        "https://gemini.google.com/*",
+        "https://hailuoai.com/*",
+        "https://tongyi.aliyun.com/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "permissions": ["storage", "sidePanel", "activeTab", "scripting"],
+  "host_permissions": [
+    "https://prompt-optimizer-api.prompt-optimizer.workers.dev/*"
+  ]
+}
