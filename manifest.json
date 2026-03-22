@@ -61,7 +61,8 @@
     "storage",
     "sidePanel",
     "activeTab",
-    "scripting"
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "https://prompt-optimizer-api.prompt-optimizer.workers.dev/*",
@@ -84,6 +85,7 @@
     "https://copilot.microsoft.com/*",
     "https://agent.minimax.io/*",
     "https://chat.z.ai/*",
-    "https://qwen.ai/*"
+    "https://qwen.ai/*",
+    "https://vyuzkbdxsweaqftyqifh.supabase.co/*"
   ]
 }

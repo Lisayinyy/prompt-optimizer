@@ -85,6 +85,7 @@
     "https://copilot.microsoft.com/*",
     "https://agent.minimax.io/*",
     "https://chat.z.ai/*",
-    "https://qwen.ai/*"
+    "https://qwen.ai/*",
+    "https://vyuzkbdxsweaqftyqifh.supabase.co/*"
   ]
 }
