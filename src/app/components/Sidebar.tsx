@@ -359,18 +359,74 @@ export default function Sidebar() {
 
   const targetObj = AI_TARGETS.find((t) => t.id === selectedTarget)!;
 
-  const handleOptimize = () => {
+  const [diagnosis, setDiagnosis] = useState("");
+
+  const API_URL = "https://prompt-optimizer-api.prompt-optimizer.workers.dev";
+
+  const handleOptimize = async () => {
     if (!inputText.trim()) return;
     setIsOptimizing(true);
     setOptimizedText("");
-    setTimeout(() => {
-      const result =
-        lang === "zh"
-          ? `作为该领域的专家，请针对以下问题提供全面且结构清晰的回答：\n\n${inputText.trim()}\n\n请包含：\n- 核心概念与定义\n- 适当的实际案例\n- 分步骤的操作指南（如适用）\n- 常见误区与注意事项\n\n请使用清晰的标题和要点格式，便于阅读。`
-          : `As an expert in the subject matter, please provide a comprehensive and well-structured response to the following:\n\n${inputText.trim()}\n\nPlease include:\n- Key concepts and definitions\n- Practical examples where applicable\n- Step-by-step guidance if relevant\n- Common pitfalls to avoid\n\nFormat your response with clear headings and bullet points for readability.`;
-      setOptimizedText(result);
+    setDiagnosis("");
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: inputText.trim() }),
+      });
+
+      if (!res.ok) throw new Error("服务异常");
+
+      const data = await res.json();
+      if (data.diagnosis && data.diagnosis !== "已优化") {
+        setDiagnosis(data.diagnosis);
+      }
+      setOptimizedText(data.optimized || data.error || "未返回结果");
+    } catch (err) {
+      setOptimizedText(
+        lang === "zh" ? "优化失败，请稍后重试" : "Optimization failed, please try again"
+      );
+    } finally {
       setIsOptimizing(false);
-    }, 1500);
+    }
+  };
+
+  const handleFillToChat = async () => {
+    if (!optimizedText) return;
+    try {
+      if (typeof chrome !== "undefined" && chrome?.tabs && chrome?.scripting) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab?.id) return;
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          func: (text: string) => {
+            const selectors = ["textarea", "div[contenteditable='true']", "[role='textbox']", "#prompt-textarea", ".ProseMirror"];
+            let input: HTMLElement | null = null;
+            for (const sel of selectors) {
+              const el = document.querySelector<HTMLElement>(sel);
+              if (el && el.offsetHeight > 0) { input = el; break; }
+            }
+            if (!input) { alert("未找到对话输入框"); return; }
+            input.focus();
+            if (input instanceof HTMLTextAreaElement) {
+              const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+              if (setter) setter.call(input, text);
+              else input.value = text;
+              input.dispatchEvent(new Event("input", { bubbles: true }));
+            } else {
+              input.innerHTML = "";
+              document.execCommand("selectAll", false, undefined);
+              document.execCommand("insertText", false, text);
+              input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+            }
+          },
+          args: [optimizedText],
+        });
+      } else {
+        await navigator.clipboard.writeText(optimizedText);
+      }
+    } catch {}
   };
 
   const handleCopy = (text?: string) => {
@@ -658,6 +714,14 @@ export default function Sidebar() {
                     exit={{ opacity: 0, height: 0 }}
                     transition={{ duration: 0.25 }}
                   >
+                    {/* Diagnosis card */}
+                    {diagnosis && (
+                      <div className="flex items-start gap-2 px-3 py-2.5 bg-[#fffbf0] border border-[#f0e4c8] rounded-lg mb-3">
+                        <Lightbulb size={13} className="text-[#c09b3f] flex-shrink-0 mt-0.5" />
+                        <span className="text-[12.5px] text-[#8a6d3b]">{diagnosis}</span>
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between mb-1.5">
                       <label
                         className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase flex items-center gap-1.5"
@@ -666,24 +730,33 @@ export default function Sidebar() {
                         <Target size={11} />
                         {t("optimizedResult")}
                       </label>
-                      <button
-                        onClick={() => handleCopy()}
-                        className="flex items-center gap-1 text-[11px] text-[#8b8b9e] hover:text-[#18181b] transition-colors bg-[#f4f4f6] hover:bg-[#ebebf0] px-2 py-1 rounded-md"
-                      >
-                        {copied ? (
-                          <>
-                            <Check size={11} className="text-emerald-500" />
-                            <span className="text-emerald-500">
-                              {t("copied")}
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy size={11} />
-                            {t("copy")}
-                          </>
-                        )}
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          onClick={handleFillToChat}
+                          className="flex items-center gap-1 text-[11px] text-white bg-[#18181b] hover:bg-[#2a2a30] px-2.5 py-1 rounded-md transition-colors"
+                        >
+                          <ArrowRight size={10} />
+                          {lang === "zh" ? "填入对话框" : "Fill Chat"}
+                        </button>
+                        <button
+                          onClick={() => handleCopy()}
+                          className="flex items-center gap-1 text-[11px] text-[#8b8b9e] hover:text-[#18181b] transition-colors bg-[#f4f4f6] hover:bg-[#ebebf0] px-2 py-1 rounded-md"
+                        >
+                          {copied ? (
+                            <>
+                              <Check size={11} className="text-emerald-500" />
+                              <span className="text-emerald-500">
+                                {t("copied")}
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy size={11} />
+                              {t("copy")}
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                     <div className="relative">
                       <div className="absolute top-0 left-0 w-[3px] h-full bg-[#18181b] rounded-full" />
