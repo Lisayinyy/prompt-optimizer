@@ -307,36 +307,42 @@ export default function Sidebar() {
     if (!data?.url) return;
 
     if (typeof chrome !== "undefined" && chrome?.tabs) {
-      // Chrome 插件：打开新标签页并监听回调
       const tab = await chrome.tabs.create({ url: data.url });
+      const tabId = tab.id!;
 
-      const listener = async (tabId: number, changeInfo: any) => {
-        if (tabId !== tab.id || !changeInfo.url) return;
-        const url = changeInfo.url;
+      // 轮询检查登录标签页的 URL（hash 部分 chrome.tabs.onUpdated 拿不到）
+      const checkInterval = setInterval(async () => {
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId },
+            func: () => window.location.href,
+          });
+          const currentUrl = results?.[0]?.result || "";
 
-        // 检测回调 URL（包含 access_token）
-        if (url.includes("access_token=") || url.includes("vyuzkbdxsweaqftyqifh.supabase.co/#")) {
-          chrome.tabs.onUpdated.removeListener(listener);
+          if (currentUrl.includes("access_token=")) {
+            clearInterval(checkInterval);
 
-          // 从 URL hash 提取 token
-          const hash = url.split("#")[1];
-          if (hash) {
-            const params = new URLSearchParams(hash);
-            const accessToken = params.get("access_token");
-            const refreshToken = params.get("refresh_token");
-            if (accessToken && refreshToken) {
-              await supabase.auth.setSession({
-                access_token: accessToken,
-                refresh_token: refreshToken,
-              });
+            const hash = currentUrl.split("#")[1];
+            if (hash) {
+              const params = new URLSearchParams(hash);
+              const accessToken = params.get("access_token");
+              const refreshToken = params.get("refresh_token");
+              if (accessToken && refreshToken) {
+                await supabase.auth.setSession({
+                  access_token: accessToken,
+                  refresh_token: refreshToken,
+                });
+              }
             }
+            try { chrome.tabs.remove(tabId); } catch {}
           }
-
-          // 关闭登录标签页
-          try { chrome.tabs.remove(tabId); } catch {}
+        } catch {
+          // 标签页可能已关闭或还在 Google 域名上（无权限），忽略
         }
-      };
-      chrome.tabs.onUpdated.addListener(listener);
+      }, 1500);
+
+      // 60 秒后停止检查（防止无限轮询）
+      setTimeout(() => clearInterval(checkInterval), 60000);
     } else {
       window.open(data.url, "_blank");
     }
