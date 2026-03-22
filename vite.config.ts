@@ -22,16 +22,11 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   build: {
-    // Chrome Extension 兼容：去掉 crossorigin 属性
-    cssCodeSplit: false,
     rollupOptions: {
       output: {
-        // 不用 ES module，改为 IIFE 避免 CSP 问题
-        format: 'iife',
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]',
-        inlineDynamicImports: true,
       },
     },
   },
