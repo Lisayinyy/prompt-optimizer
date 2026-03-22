@@ -297,19 +297,48 @@ export default function Sidebar() {
   }, []);
 
   const handleGoogleSignIn = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
+    const { data } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         skipBrowserRedirect: true,
+        redirectTo: "https://vyuzkbdxsweaqftyqifh.supabase.co",
       },
     });
-    if (data?.url) {
-      // Chrome 插件环境：用新标签页打开登录
-      if (typeof chrome !== "undefined" && chrome?.tabs?.create) {
-        chrome.tabs.create({ url: data.url });
-      } else {
-        window.open(data.url, "_blank");
-      }
+    if (!data?.url) return;
+
+    if (typeof chrome !== "undefined" && chrome?.tabs) {
+      // Chrome 插件：打开新标签页并监听回调
+      const tab = await chrome.tabs.create({ url: data.url });
+
+      const listener = async (tabId: number, changeInfo: any) => {
+        if (tabId !== tab.id || !changeInfo.url) return;
+        const url = changeInfo.url;
+
+        // 检测回调 URL（包含 access_token）
+        if (url.includes("access_token=") || url.includes("vyuzkbdxsweaqftyqifh.supabase.co/#")) {
+          chrome.tabs.onUpdated.removeListener(listener);
+
+          // 从 URL hash 提取 token
+          const hash = url.split("#")[1];
+          if (hash) {
+            const params = new URLSearchParams(hash);
+            const accessToken = params.get("access_token");
+            const refreshToken = params.get("refresh_token");
+            if (accessToken && refreshToken) {
+              await supabase.auth.setSession({
+                access_token: accessToken,
+                refresh_token: refreshToken,
+              });
+            }
+          }
+
+          // 关闭登录标签页
+          try { chrome.tabs.remove(tabId); } catch {}
+        }
+      };
+      chrome.tabs.onUpdated.addListener(listener);
+    } else {
+      window.open(data.url, "_blank");
     }
   };
 
