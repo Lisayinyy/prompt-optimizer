@@ -16,7 +16,7 @@
     "default_title": "打开 prompt.ai"
   },
   "side_panel": {
-    "default_path": "index.html"
+    "default_path": "dist/index.html"
   },
   "background": {
     "service_worker": "background.js"
