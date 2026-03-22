@@ -408,104 +408,61 @@ export default function Sidebar() {
   const handleFillToChat = async () => {
     if (!optimizedText) return;
     try {
-      if (typeof chrome !== "undefined" && chrome?.tabs && chrome?.scripting) {
+      if (typeof chrome !== "undefined" && chrome?.tabs) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (!tab?.id) {
-          // 没有 tab，退回复制
-          await navigator.clipboard.writeText(optimizedText);
-          setFillStatus("copied");
-          setTimeout(() => setFillStatus(""), 2000);
-          return;
-        }
-        const results = await chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          func: (text: string) => {
-            // 按优先级尝试各种输入框选择器
-            const selectors = [
-              "#prompt-textarea",                          // ChatGPT
-              "div.ProseMirror[contenteditable='true']",   // Claude
-              "div[contenteditable='true'][spellcheck]",   // Kimi
-              "div[contenteditable='true']",               // 通用 contenteditable
-              "textarea[placeholder]",                     // 通用 textarea
-              "textarea",                                  // 兜底 textarea
-              "[role='textbox']",                          // ARIA textbox
-            ];
+        if (tab?.id) {
+          // 方法1：通过 content script 消息通信（最可靠）
+          try {
+            const response = await chrome.tabs.sendMessage(tab.id, {
+              type: "FILL_INPUT",
+              text: optimizedText,
+            });
+            if (response?.ok) {
+              setFillStatus("filled");
+              setTimeout(() => setFillStatus(""), 2000);
+              return;
+            }
+          } catch {
+            // content script 没加载，尝试方法2
+          }
 
-            let input: HTMLElement | null = null;
-            for (const sel of selectors) {
-              const els = document.querySelectorAll<HTMLElement>(sel);
-              for (const el of els) {
-                if (el.offsetHeight > 0 && el.offsetWidth > 0) {
-                  input = el;
-                  break;
+          // 方法2：直接注入脚本
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId: tab.id },
+              func: (text: string) => {
+                const sels = ["#prompt-textarea", "div.ProseMirror[contenteditable='true']", "div[contenteditable='true'][spellcheck]", "div[contenteditable='true']", "textarea"];
+                let input: HTMLElement | null = null;
+                for (const s of sels) { const el = document.querySelector<HTMLElement>(s); if (el && el.offsetHeight > 0) { input = el; break; } }
+                if (!input) return;
+                input.focus();
+                if (input instanceof HTMLTextAreaElement) {
+                  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
+                  if (setter) setter.call(input, text); else input.value = text;
+                  input.dispatchEvent(new Event("input", { bubbles: true }));
+                } else {
+                  input.textContent = "";
+                  const sel = window.getSelection(); const range = document.createRange();
+                  range.selectNodeContents(input); sel?.removeAllRanges(); sel?.addRange(range);
+                  document.execCommand("insertText", false, text);
+                  if (!input.textContent) input.textContent = text;
+                  input.dispatchEvent(new InputEvent("input", { bubbles: true }));
                 }
-              }
-              if (input) break;
-            }
-
-            if (!input) return "not_found";
-
-            input.focus();
-
-            if (input instanceof HTMLTextAreaElement || input instanceof HTMLInputElement) {
-              const proto = input instanceof HTMLTextAreaElement
-                ? HTMLTextAreaElement.prototype
-                : HTMLInputElement.prototype;
-              const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-              if (setter) setter.call(input, text);
-              else input.value = text;
-              input.dispatchEvent(new Event("input", { bubbles: true }));
-              input.dispatchEvent(new Event("change", { bubbles: true }));
-            } else {
-              // contenteditable
-              input.focus();
-              input.textContent = "";
-
-              // 方法1: execCommand
-              const sel = window.getSelection();
-              const range = document.createRange();
-              range.selectNodeContents(input);
-              sel?.removeAllRanges();
-              sel?.addRange(range);
-              document.execCommand("insertText", false, text);
-
-              // 方法2: 直接设置（兜底）
-              if (!input.textContent || input.textContent.trim() === "") {
-                input.textContent = text;
-              }
-
-              // 触发事件
-              input.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText" }));
-              input.dispatchEvent(new Event("change", { bubbles: true }));
-            }
-
-            return "ok";
-          },
-          args: [optimizedText],
-        });
-
-        const result = results?.[0]?.result;
-        if (result === "ok") {
-          setFillStatus("filled");
-        } else {
-          // 填入失败，退回复制到剪贴板
-          await navigator.clipboard.writeText(optimizedText);
-          setFillStatus("copied");
+              },
+              args: [optimizedText],
+            });
+            setFillStatus("filled");
+            setTimeout(() => setFillStatus(""), 2000);
+            return;
+          } catch {}
         }
-        setTimeout(() => setFillStatus(""), 2000);
-      } else {
-        await navigator.clipboard.writeText(optimizedText);
-        setFillStatus("copied");
-        setTimeout(() => setFillStatus(""), 2000);
       }
-    } catch (err) {
-      // 最终兜底：复制到剪贴板
-      try {
-        await navigator.clipboard.writeText(optimizedText);
-        setFillStatus("copied");
-      } catch {
-        setFillStatus("error");
-      }
+      // 兜底：复制到剪贴板
+      await navigator.clipboard.writeText(optimizedText);
+      setFillStatus("copied");
+      setTimeout(() => setFillStatus(""), 2000);
+    } catch {
+      try { await navigator.clipboard.writeText(optimizedText); setFillStatus("copied"); } catch { setFillStatus("error"); }
       setTimeout(() => setFillStatus(""), 2000);
     }
   };
