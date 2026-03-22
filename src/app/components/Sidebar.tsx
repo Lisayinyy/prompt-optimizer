@@ -334,7 +334,9 @@ export default function Sidebar() {
                 });
               }
             }
-            try { chrome.tabs.remove(tabId); } catch {}
+            // 确保关闭标签页（多次尝试）
+            setTimeout(() => { try { chrome.tabs.remove(tabId); } catch {} }, 500);
+            setTimeout(() => { try { chrome.tabs.remove(tabId); } catch {} }, 1500);
           }
         } catch {
           // 标签页可能已关闭或还在 Google 域名上（无权限），忽略
@@ -469,6 +471,18 @@ export default function Sidebar() {
         setDiagnosis(data.diagnosis);
       }
       setOptimizedText(data.optimized || data.error || "未返回结果");
+
+      // 存入数据库（已登录时）
+      if (user && data.optimized) {
+        supabase.from("prompts").insert({
+          user_id: user.id,
+          original_text: inputText.trim(),
+          optimized_text: data.optimized,
+          diagnosis: data.diagnosis || null,
+          platform: selectedTarget !== "any" ? selectedTarget : null,
+          tone: selectedTone,
+        }).then(() => {}).catch(() => {});
+      }
     } catch (err) {
       setOptimizedText(
         lang === "zh" ? "优化失败，请稍后重试" : "Optimization failed, please try again"
@@ -633,9 +647,13 @@ export default function Sidebar() {
           </div>
           <div className="flex items-center gap-2">
             {isLoggedIn && (
-              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-                <User size={11} className="text-white" />
-              </div>
+              user?.user_metadata?.avatar_url ? (
+                <img src={user.user_metadata.avatar_url} className="w-6 h-6 rounded-full" alt="" />
+              ) : (
+                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                  <User size={11} className="text-white" />
+                </div>
+              )
             )}
             <span className="text-[11px] text-[#8b8b9e] bg-[#f4f4f6] px-2 py-0.5 rounded-full tracking-[-0.2px]">
               v1.2
@@ -1524,9 +1542,13 @@ export default function Sidebar() {
                 {isLoggedIn ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
-                        <User size={14} className="text-white" />
-                      </div>
+                      {user?.user_metadata?.avatar_url ? (
+                        <img src={user.user_metadata.avatar_url} className="w-8 h-8 rounded-full" alt="" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                          <User size={14} className="text-white" />
+                        </div>
+                      )}
                       <div>
                         <p className="text-[13px] text-[#18181b]" style={{ fontWeight: 500 }}>
                           {user?.user_metadata?.full_name || user?.email || "User"}
