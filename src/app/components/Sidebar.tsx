@@ -1582,6 +1582,106 @@ export default function Sidebar() {
                     );
                   })()}
 
+                  {/* 发送周报按钮 */}
+                  {(() => {
+                    const handleSendReport = () => {
+                      const now = new Date();
+                      const weekStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()-6} - ${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}`;
+                      const topPlatform = (() => {
+                        const countMap: Record<string, number> = {};
+                        realHistory.forEach(r => {
+                          const p = r.platform && r.platform !== "any" ? r.platform : "其他";
+                          countMap[p] = (countMap[p] || 0) + 1;
+                        });
+                        const sorted = Object.entries(countMap).sort((a,b) => b[1]-a[1]);
+                        return sorted[0]?.[0] || "-";
+                      })();
+
+                      const peakHour = (() => {
+                        const hourMap: Record<number, number> = {};
+                        realHistory.forEach(r => {
+                          const h = new Date(r.created_at).getHours();
+                          hourMap[h] = (hourMap[h] || 0) + 1;
+                        });
+                        const sorted = Object.entries(hourMap).sort((a,b) => b[1]-a[1]);
+                        const h = Number(sorted[0]?.[0] ?? 14);
+                        return lang === "zh" ? `${h}:00 - ${h+1}:00` : `${h < 12 ? h+"am" : h === 12 ? "12pm" : (h-12)+"pm"}`;
+                      })();
+
+                      const recentPrompts = realHistory.slice(0, 3).map((r, i) =>
+                        `${i+1}. ${r.original_text.slice(0, 50)}${r.original_text.length > 50 ? "..." : ""}`
+                      ).join("\n");
+
+                      const subject = lang === "zh"
+                        ? `📊 prompt.ai 周报 | ${weekStr}`
+                        : `📊 prompt.ai Weekly Report | ${weekStr}`;
+
+                      const body = lang === "zh" ? `
+Hi ${user?.user_metadata?.full_name || "你"},
+
+这是你本周的 prompt.ai 使用报告 👋
+
+━━━━━━━━━━━━━━━━━━━━━━
+📈 使用概览
+━━━━━━━━━━━━━━━━━━━━━━
+• 累计优化 Prompt：${realStats.totalPrompts} 条
+• 节省时间（估算）：${Math.round(realStats.totalPrompts * 0.05)} 小时
+• 连续使用天数：${realStats.streak} 天
+• 最常用 AI 平台：${topPlatform}
+• 最活跃时段：${peakHour}
+
+━━━━━━━━━━━━━━━━━━━━━━
+🕐 最近优化的 Prompt
+━━━━━━━━━━━━━━━━━━━━━━
+${recentPrompts || "暂无记录"}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+继续加油！更好的 prompt = 更好的 AI 输出 🚀
+
+— prompt.ai 团队
+                      `.trim() : `
+Hi ${user?.user_metadata?.full_name || "there"},
+
+Here's your prompt.ai weekly report 👋
+
+━━━━━━━━━━━━━━━━━━━━━━
+📈 Usage Overview
+━━━━━━━━━━━━━━━━━━━━━━
+• Total Prompts Optimized: ${realStats.totalPrompts}
+• Time Saved (est.): ${Math.round(realStats.totalPrompts * 0.05)}h
+• Day Streak: ${realStats.streak} days
+• Most Used AI: ${topPlatform}
+• Peak Hours: ${peakHour}
+
+━━━━━━━━━━━━━━━━━━━━━━
+🕐 Recent Prompts
+━━━━━━━━━━━━━━━━━━━━━━
+${recentPrompts || "No records yet"}
+
+━━━━━━━━━━━━━━━━━━━━━━
+
+Keep it up! Better prompts = Better AI outputs 🚀
+
+— prompt.ai Team
+                      `.trim();
+
+                      const mailto = `mailto:${user?.email || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+                      window.open(mailto);
+                    };
+
+                    return (
+                      <button
+                        onClick={handleSendReport}
+                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[#e8e8ec] text-[13px] text-[#5a5a72] hover:text-[#18181b] hover:border-[#18181b] hover:bg-[#fafafa] transition-all"
+                        style={{ fontWeight: 500 }}
+                      >
+                        <MessageSquare size={13} />
+                        {lang === "zh" ? "发送周报到邮箱" : "Send Weekly Report"}
+                      </button>
+                    );
+                  })()}
+
                   {/* Sign out link */}
                   <button
                     onClick={handleSignOut}
