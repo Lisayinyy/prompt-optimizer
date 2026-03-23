@@ -11,6 +11,8 @@
   // 输入框选择器（按优先级排列）
   const INPUT_SELECTORS = [
     "#prompt-textarea",                              // ChatGPT
+    "textarea.j-search-input",                       // Genspark
+    "textarea.search-input",                         // Genspark (备用)
     "div.chat-input-editor[contenteditable='true']", // Kimi (kimi.com)
     "div.ProseMirror[contenteditable='true']",        // Claude
     "div[contenteditable='true'][spellcheck]",        // Kimi (旧域名)
@@ -47,14 +49,25 @@
     el.focus();
 
     if (el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) {
+      // React 项目需要通过 nativeInputValueSetter 触发，否则 onChange 不会响应
       const proto = el instanceof HTMLTextAreaElement
         ? HTMLTextAreaElement.prototype
         : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-      if (setter) setter.call(el, text);
-      else el.value = text;
+      if (setter) {
+        setter.call(el, text);
+      } else {
+        el.value = text;
+      }
+      // 依次触发多个事件，确保 React / Vue 等框架都能响应
       el.dispatchEvent(new Event("input", { bubbles: true }));
       el.dispatchEvent(new Event("change", { bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, key: "a" }));
+      el.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true, key: "a" }));
+      // Genspark 特殊处理：模拟用户真实输入
+      if (el.classList.contains("j-search-input") || el.classList.contains("search-input")) {
+        el.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: text }));
+      }
     } else {
       // contenteditable
       el.textContent = "";

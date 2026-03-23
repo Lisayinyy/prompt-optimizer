@@ -209,6 +209,7 @@ const AI_TARGETS = [
   { id: "copilot", name: "Copilot", icon: Code },          // Microsoft
   { id: "doubao", name: "豆包", icon: MessageSquare },      // 字节跳动
   { id: "wenxin", name: "文心一言", icon: PenTool },         // 百度
+  { id: "genspark", name: "Genspark", icon: Sparkles },     // Genspark AI
 ];
 
 const LANGUAGES: { code: Lang; label: string; flag: string }[] = [
