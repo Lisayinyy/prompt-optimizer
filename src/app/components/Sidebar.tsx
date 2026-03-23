@@ -357,6 +357,67 @@ export default function Sidebar() {
   };
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
 
+  // ── 真实历史记录 ──
+  type PromptRecord = {
+    id: string;
+    original_text: string;
+    optimized_text: string | null;
+    diagnosis: string | null;
+    platform: string | null;
+    tone: string | null;
+    created_at: string;
+  };
+  const [realHistory, setRealHistory] = useState<PromptRecord[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historySearch, setHistorySearch] = useState("");
+
+  const fetchHistory = async () => {
+    if (!user) return;
+    setHistoryLoading(true);
+    const { data, error } = await supabase
+      .from("prompts")
+      .select("id, original_text, optimized_text, diagnosis, platform, tone, created_at")
+      .order("created_at", { ascending: false })
+      .limit(50);
+    if (!error && data) setRealHistory(data as PromptRecord[]);
+    setHistoryLoading(false);
+  };
+
+  useEffect(() => {
+    if (isLoggedIn && activeTab === "history") fetchHistory();
+  }, [isLoggedIn, activeTab]);
+
+  const deleteHistory = async (id: string) => {
+    await supabase.from("prompts").delete().eq("id", id);
+    setRealHistory((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const formatRelativeTime = (isoStr: string) => {
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+    if (lang === "zh") {
+      if (mins < 1) return "刚刚";
+      if (mins < 60) return `${mins} 分钟前`;
+      if (hours < 24) return `${hours} 小时前`;
+      if (days === 1) return "昨天";
+      return `${days} 天前`;
+    } else {
+      if (mins < 1) return "just now";
+      if (mins < 60) return `${mins}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      if (days === 1) return "yesterday";
+      return `${days}d ago`;
+    }
+  };
+
+  const filteredHistory = realHistory.filter(
+    (r) =>
+      r.original_text.toLowerCase().includes(historySearch.toLowerCase()) ||
+      (r.optimized_text || "").toLowerCase().includes(historySearch.toLowerCase())
+  );
+
   const t = (key: string) => i18n[lang][key] ?? key;
 
   const historyItems = lang === "zh"
@@ -958,124 +1019,196 @@ export default function Sidebar() {
               transition={{ duration: 0.15 }}
               className="px-5 pb-5 pt-3"
             >
-              <div className="flex flex-col gap-2.5">
-                {historyItems.map((item, i) => {
-                  const isExpanded = expandedHistory === i;
-                  return (
-                    <motion.div
-                      key={i}
-                      layout
-                      className="rounded-xl border border-[#e8e8ec] bg-white hover:border-[#d0d0d8] transition-colors overflow-hidden"
-                    >
-                      {/* Header - always visible */}
-                      <button
-                        onClick={() =>
-                          setExpandedHistory(isExpanded ? null : i)
-                        }
-                        className="text-left w-full p-3.5 group"
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11.5px] text-[#8b8b9e]">
-                              {item.time}
-                            </span>
-                            <span className="text-[10px] text-[#8b8b9e] bg-[#f4f4f6] px-1.5 py-0.5 rounded">
-                              {item.model}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="text-[11px] text-emerald-500"
-                              style={{ fontWeight: 500 }}
-                            >
-                              {item.score}
-                            </span>
-                            <motion.div
-                              animate={{ rotate: isExpanded ? 90 : 0 }}
-                              transition={{ duration: 0.15 }}
-                            >
-                              <ArrowRight
-                                size={12}
-                                className="text-[#c0c0cc] group-hover:text-[#18181b] transition-colors"
-                              />
-                            </motion.div>
-                          </div>
-                        </div>
-                        <p
-                          className="text-[13px] text-[#18181b]"
-                          style={{ fontWeight: 500 }}
-                        >
-                          {item.original}
-                        </p>
-                        {!isExpanded && (
-                          <p className="text-[12px] text-[#8b8b9e] truncate mt-1">
-                            → {item.optimized.split("\n")[0]}
-                          </p>
-                        )}
-                      </button>
+              {/* 未登录 */}
+              {!isLoggedIn ? (
+                <div className="flex flex-col items-center justify-center py-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f4f4f6] to-[#e8e8ec] flex items-center justify-center mb-5">
+                    <History size={28} className="text-[#8b8b9e]" />
+                  </div>
+                  <h3 className="text-[15px] text-[#18181b] text-center mb-2">
+                    {lang === "zh" ? "登录查看历史记录" : "Sign in to view history"}
+                  </h3>
+                  <p className="text-[12.5px] text-[#8b8b9e] text-center mb-6 px-4" style={{ lineHeight: "1.6" }}>
+                    {lang === "zh"
+                      ? "登录后可以查看所有优化过的 prompt 记录，随时复用"
+                      : "Sign in to access all your optimized prompts anytime"}
+                  </p>
+                  <button
+                    onClick={handleGoogleSignIn}
+                    className="flex items-center gap-2 bg-[#18181b] text-white px-6 py-2.5 rounded-lg text-[13px] hover:bg-[#2a2a30] active:scale-[0.98] transition-all shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <LogIn size={14} />
+                    {t("signIn")}
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {/* 搜索框 */}
+                  <div className="relative mb-3">
+                    <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#c0c0cc]" />
+                    <input
+                      type="text"
+                      value={historySearch}
+                      onChange={(e) => setHistorySearch(e.target.value)}
+                      placeholder={lang === "zh" ? "搜索历史记录..." : "Search history..."}
+                      className="w-full pl-8 pr-3 py-2 rounded-lg border border-[#e8e8ec] bg-[#fafafa] text-[13px] text-[#18181b] placeholder:text-[#c0c0cc] focus:outline-none focus:border-[#b0b0c0] transition-colors"
+                    />
+                  </div>
 
-                      {/* Expanded content */}
-                      <AnimatePresence>
-                        {isExpanded && (
+                  {/* 加载中 */}
+                  {historyLoading ? (
+                    <div className="flex items-center justify-center py-12">
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                      >
+                        <Sparkles size={18} className="text-[#c0c0cc]" />
+                      </motion.div>
+                    </div>
+                  ) : filteredHistory.length === 0 ? (
+                    /* 空状态 */
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <Clock size={28} className="text-[#e8e8ec] mb-3" />
+                      <p className="text-[13px] text-[#8b8b9e]">
+                        {historySearch
+                          ? (lang === "zh" ? "没有找到匹配记录" : "No matching records")
+                          : (lang === "zh" ? "还没有优化记录" : "No history yet")}
+                      </p>
+                      {!historySearch && (
+                        <p className="text-[12px] text-[#c0c0cc] mt-1">
+                          {lang === "zh" ? "去优化你的第一个 prompt 吧" : "Optimize your first prompt!"}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    /* 历史列表 */
+                    <div className="flex flex-col gap-2.5">
+                      {filteredHistory.map((item, i) => {
+                        const isExpanded = expandedHistory === i;
+                        return (
                           <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="overflow-hidden"
+                            key={item.id}
+                            layout
+                            className="rounded-xl border border-[#e8e8ec] bg-white hover:border-[#d0d0d8] transition-colors overflow-hidden"
                           >
-                            <div className="px-3.5 pb-3.5">
-                              <div className="border-t border-[#f0f0f4] pt-3">
-                                {/* Optimized label */}
-                                <div className="flex items-center justify-between mb-2">
-                                  <span
-                                    className="text-[11px] text-[#8b8b9e] uppercase tracking-[0.3px]"
-                                    style={{ fontWeight: 500 }}
-                                  >
-                                    {t("optimized")}
+                            {/* Header */}
+                            <button
+                              onClick={() => setExpandedHistory(isExpanded ? null : i)}
+                              className="text-left w-full p-3.5 group"
+                            >
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[11.5px] text-[#8b8b9e]">
+                                    {formatRelativeTime(item.created_at)}
                                   </span>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleCopy(item.optimized);
-                                    }}
-                                    className="flex items-center gap-1 text-[10.5px] text-[#8b8b9e] hover:text-[#18181b] bg-[#f4f4f6] hover:bg-[#ebebf0] px-2 py-0.5 rounded transition-colors"
-                                  >
-                                    <Copy size={10} />
-                                    {t("copy")}
-                                  </button>
+                                  {item.platform && item.platform !== "any" && (
+                                    <span className="text-[10px] text-[#8b8b9e] bg-[#f4f4f6] px-1.5 py-0.5 rounded capitalize">
+                                      {item.platform}
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="relative">
-                                  <div className="absolute top-0 left-0 w-[2.5px] h-full bg-[#18181b] rounded-full" />
-                                  <div
-                                    className="pl-3 text-[12.5px] text-[#2a2a30] whitespace-pre-wrap"
-                                    style={{ lineHeight: "1.7" }}
-                                  >
-                                    {item.optimized}
-                                  </div>
-                                </div>
-                                {/* Use again */}
-                                <button
-                                  onClick={() => {
-                                    setInputText(item.original);
-                                    setActiveTab("optimize");
-                                  }}
-                                  className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg border border-[#e8e8ec] text-[12px] text-[#5a5a72] hover:text-[#18181b] hover:border-[#c8c8d4] transition-colors"
+                                <motion.div
+                                  animate={{ rotate: isExpanded ? 90 : 0 }}
+                                  transition={{ duration: 0.15 }}
                                 >
-                                  <RotateCcw size={11} />
-                                  {lang === "zh"
-                                    ? "重新优化"
-                                    : "Re-optimize"}
-                                </button>
+                                  <ArrowRight size={12} className="text-[#c0c0cc] group-hover:text-[#18181b] transition-colors" />
+                                </motion.div>
                               </div>
-                            </div>
+                              <p className="text-[13px] text-[#18181b]" style={{ fontWeight: 500 }}>
+                                {item.original_text.length > 60
+                                  ? item.original_text.slice(0, 60) + "…"
+                                  : item.original_text}
+                              </p>
+                              {!isExpanded && item.optimized_text && (
+                                <p className="text-[12px] text-[#8b8b9e] truncate mt-1">
+                                  → {item.optimized_text.split("\n")[0]}
+                                </p>
+                              )}
+                            </button>
+
+                            {/* Expanded */}
+                            <AnimatePresence>
+                              {isExpanded && (
+                                <motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: "auto", opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="overflow-hidden"
+                                >
+                                  <div className="px-3.5 pb-3.5">
+                                    <div className="border-t border-[#f0f0f4] pt-3">
+                                      {/* Diagnosis */}
+                                      {item.diagnosis && item.diagnosis !== "已优化" && (
+                                        <div className="flex items-start gap-2 px-3 py-2 bg-[#fffbf0] border border-[#f0e4c8] rounded-lg mb-3">
+                                          <Lightbulb size={12} className="text-[#c09b3f] flex-shrink-0 mt-0.5" />
+                                          <span className="text-[12px] text-[#8a6d3b]">{item.diagnosis}</span>
+                                        </div>
+                                      )}
+
+                                      {/* Original */}
+                                      <div className="mb-3">
+                                        <span className="text-[11px] text-[#8b8b9e] uppercase tracking-[0.3px] block mb-1.5" style={{ fontWeight: 500 }}>
+                                          {t("original")}
+                                        </span>
+                                        <p className="text-[12.5px] text-[#8b8b9e] whitespace-pre-wrap" style={{ lineHeight: "1.6" }}>
+                                          {item.original_text}
+                                        </p>
+                                      </div>
+
+                                      {/* Optimized */}
+                                      {item.optimized_text && (
+                                        <div>
+                                          <div className="flex items-center justify-between mb-1.5">
+                                            <span className="text-[11px] text-[#8b8b9e] uppercase tracking-[0.3px]" style={{ fontWeight: 500 }}>
+                                              {t("optimized")}
+                                            </span>
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); handleCopy(item.optimized_text!); }}
+                                              className="flex items-center gap-1 text-[10.5px] text-[#8b8b9e] hover:text-[#18181b] bg-[#f4f4f6] hover:bg-[#ebebf0] px-2 py-0.5 rounded transition-colors"
+                                            >
+                                              <Copy size={10} />
+                                              {t("copy")}
+                                            </button>
+                                          </div>
+                                          <div className="relative">
+                                            <div className="absolute top-0 left-0 w-[2.5px] h-full bg-[#18181b] rounded-full" />
+                                            <div className="pl-3 text-[12.5px] text-[#2a2a30] whitespace-pre-wrap max-h-[150px] overflow-y-auto" style={{ lineHeight: "1.7" }}>
+                                              {item.optimized_text}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* Actions */}
+                                      <div className="flex gap-2 mt-3">
+                                        <button
+                                          onClick={() => { setInputText(item.original_text); setActiveTab("optimize"); }}
+                                          className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg border border-[#e8e8ec] text-[12px] text-[#5a5a72] hover:text-[#18181b] hover:border-[#c8c8d4] transition-colors"
+                                        >
+                                          <RotateCcw size={11} />
+                                          {lang === "zh" ? "重新优化" : "Re-optimize"}
+                                        </button>
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); deleteHistory(item.id); }}
+                                          className="px-3 py-2 rounded-lg border border-[#e8e8ec] text-[12px] text-[#c0c0cc] hover:text-red-400 hover:border-red-200 transition-colors"
+                                        >
+                                          {lang === "zh" ? "删除" : "Delete"}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </motion.div>
+                              )}
+                            </AnimatePresence>
                           </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </motion.div>
-                  );
-                })}
-              </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </>
+              )}
             </motion.div>
           )}
 

@@ -59,6 +59,10 @@ CREATE POLICY "Users can insert own prompts"
   ON public.prompts FOR INSERT
   WITH CHECK (auth.uid() = user_id);
 
+CREATE POLICY "Users can delete own prompts"
+  ON public.prompts FOR DELETE
+  USING (auth.uid() = user_id);
+
 -- 6. 自动创建 profile（用户注册时触发）
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
