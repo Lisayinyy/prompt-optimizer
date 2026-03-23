@@ -1561,7 +1561,12 @@ export default function Sidebar() {
                   <div className="grid grid-cols-3 gap-2">
                     {[
                       { label: t("totalPrompts"), value: realStats.totalPrompts.toLocaleString(), icon: MessageSquare },
-                      { label: t("totalHours"), value: `${Math.round(realStats.totalPrompts * 0.05)}h`, icon: Clock },
+                      { label: t("totalHours"), value: (() => {
+                          const mins = realStats.totalPrompts * 5;
+                          if (mins < 60) return `${mins}min`;
+                          const h = (mins / 60).toFixed(1).replace(/\.0$/, "");
+                          return `${h}h`;
+                        })(), icon: Clock },
                       { label: t("streak"), value: `${realStats.streak}d`, icon: Zap },
                     ].map((stat) => (
                       <div
@@ -1850,6 +1855,13 @@ export default function Sidebar() {
                         ? `📊 prompt.ai 周报 | ${weekStr}`
                         : `📊 prompt.ai Weekly Report | ${weekStr}`;
 
+                      const timeSaved = (() => {
+                        const mins = realStats.totalPrompts * 5;
+                        if (mins < 60) return lang === "zh" ? `${mins} 分钟` : `${mins} min`;
+                        const h = (mins / 60).toFixed(1).replace(/\.0$/, "");
+                        return lang === "zh" ? `${h} 小时` : `${h}h`;
+                      })();
+
                       const body = lang === "zh" ? `
 Hi ${user?.user_metadata?.full_name || "你"},
 
@@ -1859,7 +1871,7 @@ Hi ${user?.user_metadata?.full_name || "你"},
 📈 使用概览
 ━━━━━━━━━━━━━━━━━━━━━━
 • 累计优化 Prompt：${realStats.totalPrompts} 条
-• 节省时间（估算）：${Math.round(realStats.totalPrompts * 0.05)} 小时
+• 节省时间（估算）：${timeSaved}
 • 连续使用天数：${realStats.streak} 天
 • 最常用 AI 平台：${topPlatform}
 • 最活跃时段：${peakHour}
@@ -1883,7 +1895,7 @@ Here's your prompt.ai weekly report 👋
 📈 Usage Overview
 ━━━━━━━━━━━━━━━━━━━━━━
 • Total Prompts Optimized: ${realStats.totalPrompts}
-• Time Saved (est.): ${Math.round(realStats.totalPrompts * 0.05)}h
+• Time Saved (est.): ${timeSaved}
 • Day Streak: ${realStats.streak} days
 • Most Used AI: ${topPlatform}
 • Peak Hours: ${peakHour}
