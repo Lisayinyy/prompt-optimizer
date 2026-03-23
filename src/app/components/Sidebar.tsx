@@ -1324,10 +1324,33 @@ export default function Sidebar() {
                     {t("signIn")}
                   </button>
                 </div>
+              ) : realStats.totalPrompts === 0 ? (
+                /* ── 空状态：还没有数据 ── */
+                <div className="flex flex-col items-center justify-center py-10">
+                  <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#f4f4f6] to-[#e8e8ec] flex items-center justify-center mb-5">
+                    <BarChart3 size={28} className="text-[#c0c0cc]" />
+                  </div>
+                  <h3 className="text-[15px] text-[#18181b] text-center mb-2" style={{ fontWeight: 500 }}>
+                    {lang === "zh" ? "还没有使用数据" : "No data yet"}
+                  </h3>
+                  <p className="text-[12.5px] text-[#8b8b9e] text-center mb-6 px-4" style={{ lineHeight: "1.6" }}>
+                    {lang === "zh"
+                      ? "去优化几个 prompt，这里会自动生成你的使用洞察"
+                      : "Optimize some prompts and your insights will appear here"}
+                  </p>
+                  <button
+                    onClick={() => setActiveTab("optimize")}
+                    className="flex items-center gap-2 bg-[#18181b] text-white px-5 py-2.5 rounded-lg text-[13px] hover:bg-[#2a2a30] transition-all"
+                    style={{ fontWeight: 500 }}
+                  >
+                    <Sparkles size={13} />
+                    {lang === "zh" ? "去优化 Prompt" : "Start Optimizing"}
+                  </button>
+                </div>
               ) : (
-                /* ── Analytics Dashboard ── */
+                /* ── Analytics Dashboard（有数据才显示）── */
                 <div className="flex flex-col gap-5">
-                  {/* Monthly summary card */}
+                  {/* Summary card */}
                   <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-[#18181b] to-[#2d2d35] p-4 text-white">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
                     <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
@@ -1347,21 +1370,22 @@ export default function Sidebar() {
                         </span>
                       </div>
                       <div className="flex items-center gap-1">
-                        <TrendingUp size={12} className="text-emerald-400" />
+                        <Zap size={12} className="text-emerald-400" />
                         <span className="text-[12px] text-emerald-400">
-                          +23% {t("moreProductive")}
+                          {lang === "zh"
+                            ? `连续 ${realStats.streak} 天使用`
+                            : `${realStats.streak} day streak`}
                         </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Stats row */}
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 gap-2">
                     {[
                       { label: t("totalPrompts"), value: realStats.totalPrompts.toLocaleString(), icon: MessageSquare },
                       { label: t("totalHours"), value: `${Math.round(realStats.totalPrompts * 0.05)}h`, icon: Clock },
-                      { label: t("avgScore"), value: "91", icon: Target },
-                      { label: t("streak"), value: String(realStats.streak), icon: Zap },
+                      { label: t("streak"), value: `${realStats.streak}d`, icon: Zap },
                     ].map((stat) => (
                       <div
                         key={stat.label}
@@ -1384,7 +1408,7 @@ export default function Sidebar() {
                     ))}
                   </div>
 
-                  {/* Usage Over Time */}
+                  {/* Usage Over Time — 真实数据 */}
                   <div>
                     <label
                       className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block"
@@ -1395,11 +1419,26 @@ export default function Sidebar() {
                     <div className="bg-[#fafafa] border border-[#e8e8ec] rounded-xl p-3">
                       <ResponsiveContainer width="100%" height={120}>
                         <AreaChart
-                          data={
-                            lang === "zh"
-                              ? usageTrendDataZh
-                              : usageTrendData
-                          }
+                          data={(() => {
+                            // 从真实历史生成最近7天的使用趋势
+                            const days = Array.from({ length: 7 }, (_, i) => {
+                              const d = new Date();
+                              d.setDate(d.getDate() - (6 - i));
+                              return d;
+                            });
+                            return days.map(d => {
+                              const label = lang === "zh"
+                                ? ["周日","周一","周二","周三","周四","周五","周六"][d.getDay()]
+                                : ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
+                              const count = realHistory.filter(r => {
+                                const rd = new Date(r.created_at);
+                                return rd.getFullYear() === d.getFullYear() &&
+                                  rd.getMonth() === d.getMonth() &&
+                                  rd.getDate() === d.getDate();
+                              }).length;
+                              return { name: label, count };
+                            });
+                          })()}
                         >
                           <defs>
                             <linearGradient
@@ -1457,191 +1496,91 @@ export default function Sidebar() {
                     </div>
                   </div>
 
-                  {/* Model Usage */}
-                  <div>
-                    <label
-                      className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block"
-                      style={{ fontWeight: 500 }}
-                    >
-                      {t("modelUsage")}
-                    </label>
-                    <div className="bg-[#fafafa] border border-[#e8e8ec] rounded-xl p-4">
-                      <div className="flex items-center gap-4">
-                        <div className="w-[100px] h-[100px] flex-shrink-0">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={modelData}
-                                innerRadius={28}
-                                outerRadius={46}
-                                paddingAngle={3}
-                                dataKey="value"
-                                strokeWidth={0}
-                              >
-                                {modelData.map((entry) => (
-                                  <Cell
-                                    key={entry.name}
-                                    fill={entry.color}
-                                  />
-                                ))}
-                              </Pie>
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                        <div className="flex flex-col gap-2 flex-1">
-                          {modelData.map((m) => (
-                            <div
-                              key={m.name}
-                              className="flex items-center justify-between"
-                            >
-                              <div className="flex items-center gap-2">
-                                <div
-                                  className="w-2 h-2 rounded-full"
-                                  style={{ background: m.color }}
-                                />
-                                <span className="text-[12px] text-[#2a2a30]">
-                                  {m.name}
-                                </span>
-                              </div>
-                              <span
-                                className="text-[12px] text-[#18181b]"
-                                style={{ fontWeight: 500 }}
-                              >
-                                {m.value}%
-                              </span>
+                  {/* Model Usage — 真实数据 */}
+                  {(() => {
+                    const colors = ["#18181b","#6366f1","#8b5cf6","#a78bfa","#c4b5fd","#e2e2e8"];
+                    const countMap: Record<string, number> = {};
+                    realHistory.forEach(r => {
+                      const p = r.platform && r.platform !== "any" ? r.platform : (lang === "zh" ? "其他" : "Other");
+                      countMap[p] = (countMap[p] || 0) + 1;
+                    });
+                    const total = realHistory.length;
+                    const modelDataReal = Object.entries(countMap)
+                      .sort((a, b) => b[1] - a[1])
+                      .slice(0, 5)
+                      .map(([name, count], i) => ({
+                        name: name.charAt(0).toUpperCase() + name.slice(1),
+                        value: Math.round((count / total) * 100),
+                        color: colors[i] || colors[5],
+                      }));
+                    if (modelDataReal.length === 0) return null;
+                    return (
+                      <div>
+                        <label className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block" style={{ fontWeight: 500 }}>
+                          {t("modelUsage")}
+                        </label>
+                        <div className="bg-[#fafafa] border border-[#e8e8ec] rounded-xl p-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-[100px] h-[100px] flex-shrink-0">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                  <Pie data={modelDataReal} innerRadius={28} outerRadius={46} paddingAngle={3} dataKey="value" strokeWidth={0}>
+                                    {modelDataReal.map((entry) => <Cell key={entry.name} fill={entry.color} />)}
+                                  </Pie>
+                                </PieChart>
+                              </ResponsiveContainer>
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Task Breakdown */}
-                  <div>
-                    <label
-                      className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block"
-                      style={{ fontWeight: 500 }}
-                    >
-                      {t("taskBreakdown")}
-                    </label>
-                    <div className="flex flex-col gap-1.5">
-                      {taskData.map((task) => (
-                        <div
-                          key={task.name}
-                          className="flex items-center gap-3 bg-[#fafafa] border border-[#e8e8ec] rounded-lg px-3 py-2.5"
-                        >
-                          <task.icon size={14} className="text-[#8b8b9e] flex-shrink-0" />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[12.5px] text-[#2a2a30]">
-                                {task.name}
-                              </span>
-                              <span
-                                className="text-[12px] text-[#18181b]"
-                                style={{ fontWeight: 500 }}
-                              >
-                                {task.value}%
-                              </span>
-                            </div>
-                            <div className="w-full h-1.5 bg-[#e8e8ec] rounded-full overflow-hidden">
-                              <motion.div
-                                className="h-full rounded-full"
-                                style={{ background: task.color }}
-                                initial={{ width: 0 }}
-                                animate={{ width: `${task.value}%` }}
-                                transition={{
-                                  duration: 0.8,
-                                  delay: 0.1,
-                                  ease: "easeOut",
-                                }}
-                              />
+                            <div className="flex flex-col gap-2 flex-1">
+                              {modelDataReal.map((m) => (
+                                <div key={m.name} className="flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-2 h-2 rounded-full" style={{ background: m.color }} />
+                                    <span className="text-[12px] text-[#2a2a30]">{m.name}</span>
+                                  </div>
+                                  <span className="text-[12px] text-[#18181b]" style={{ fontWeight: 500 }}>{m.value}%</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })()}
 
-                  {/* Peak Hours */}
-                  <div>
-                    <label
-                      className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block"
-                      style={{ fontWeight: 500 }}
-                    >
-                      {t("peakHours")}
-                    </label>
-                    <div className="bg-[#fafafa] border border-[#e8e8ec] rounded-xl p-3">
-                      <ResponsiveContainer width="100%" height={100}>
-                        <BarChart
-                          data={
-                            lang === "zh"
-                              ? peakHoursDataZh
-                              : peakHoursData
-                          }
-                        >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            stroke="#f0f0f4"
-                            vertical={false}
-                          />
-                          <XAxis
-                            dataKey="hour"
-                            axisLine={false}
-                            tickLine={false}
-                            tick={{ fontSize: 9, fill: "#8b8b9e" }}
-                          />
-                          <YAxis hide />
-                          <Tooltip
-                            contentStyle={{
-                              background: "#18181b",
-                              border: "none",
-                              borderRadius: 8,
-                              fontSize: 11,
-                              color: "#fff",
-                              padding: "6px 10px",
-                            }}
-                          />
-                          <Bar
-                            dataKey="count"
-                            fill="#18181b"
-                            radius={[3, 3, 0, 0]}
-                          />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-
-                  {/* Top Topics */}
-                  <div>
-                    <label
-                      className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block"
-                      style={{ fontWeight: 500 }}
-                    >
-                      {t("topTopics")}
-                    </label>
-                    <div className="flex flex-col gap-1.5">
-                      {topTopics.map((topic, i) => (
-                        <div
-                          key={topic.topic}
-                          className="flex items-center gap-3 px-3 py-2.5 bg-[#fafafa] border border-[#e8e8ec] rounded-lg"
-                        >
-                          <span
-                            className="w-5 h-5 rounded-full bg-[#18181b] text-white flex items-center justify-center text-[10px] flex-shrink-0"
-                            style={{ fontWeight: 600 }}
-                          >
-                            {i + 1}
-                          </span>
-                          <span className="text-[12.5px] text-[#2a2a30] flex-1">
-                            {topic.topic}
-                          </span>
-                          <span className="text-[12px] text-[#8b8b9e]">
-                            {topic.count}
-                            {lang === "zh" ? " 次" : "x"}
-                          </span>
+                  {/* Peak Hours — 真实数据 */}
+                  {(() => {
+                    const hourMap: Record<number, number> = {};
+                    realHistory.forEach(r => {
+                      const h = new Date(r.created_at).getHours();
+                      const slot = Math.floor(h / 2) * 2;
+                      hourMap[slot] = (hourMap[slot] || 0) + 1;
+                    });
+                    const peakData = Array.from({ length: 8 }, (_, i) => {
+                      const h = i * 3;
+                      const label = lang === "zh" ? `${h}时` : `${h === 0 ? "12am" : h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h-12}pm`}`;
+                      return { hour: label, count: hourMap[h] || hourMap[h+1] || hourMap[h+2] || 0 };
+                    });
+                    const hasAny = peakData.some(d => d.count > 0);
+                    if (!hasAny) return null;
+                    return (
+                      <div>
+                        <label className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block" style={{ fontWeight: 500 }}>
+                          {t("peakHours")}
+                        </label>
+                        <div className="bg-[#fafafa] border border-[#e8e8ec] rounded-xl p-3">
+                          <ResponsiveContainer width="100%" height={100}>
+                            <BarChart data={peakData}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f4" vertical={false} />
+                              <XAxis dataKey="hour" axisLine={false} tickLine={false} tick={{ fontSize: 9, fill: "#8b8b9e" }} />
+                              <YAxis hide />
+                              <Tooltip contentStyle={{ background: "#18181b", border: "none", borderRadius: 8, fontSize: 11, color: "#fff", padding: "6px 10px" }} />
+                              <Bar dataKey="count" fill="#18181b" radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Sign out link */}
                   <button
