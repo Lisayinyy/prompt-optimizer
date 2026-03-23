@@ -301,7 +301,7 @@ export default function Sidebar() {
       provider: "google",
       options: {
         skipBrowserRedirect: true,
-        redirectTo: "https://vyuzkbdxsweaqftyqifh.supabase.co",
+        redirectTo: "https://vyuzkbdxsweaqftyqifh.supabase.co/auth/v1/callback",
       },
     });
     if (!data?.url) return;
