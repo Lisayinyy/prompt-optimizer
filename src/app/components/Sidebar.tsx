@@ -307,6 +307,10 @@ export default function Sidebar() {
     if (!data?.url) return;
 
     if (typeof chrome !== "undefined" && chrome?.tabs) {
+      // 记录当前正在看的标签页，登录完回来
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const returnTabId = currentTab?.id;
+
       const tab = await chrome.tabs.create({ url: data.url });
       const tabId = tab.id!;
 
@@ -334,9 +338,16 @@ export default function Sidebar() {
                 });
               }
             }
-            // 确保关闭标签页（多次尝试）
-            setTimeout(() => { try { chrome.tabs.remove(tabId); } catch {} }, 500);
-            setTimeout(() => { try { chrome.tabs.remove(tabId); } catch {} }, 1500);
+            // 关闭登录标签页，切回原来的标签页
+            setTimeout(() => {
+              try { chrome.tabs.remove(tabId); } catch {}
+              // 切回登录前正在看的标签页
+              if (returnTabId) {
+                setTimeout(() => {
+                  try { chrome.tabs.update(returnTabId, { active: true }); } catch {}
+                }, 200);
+              }
+            }, 500);
           }
         } catch {
           // 标签页可能已关闭或还在 Google 域名上（无权限），忽略
