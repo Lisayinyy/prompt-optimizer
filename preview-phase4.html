@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>Phase 4 预览</title>
+<style>
+  body { font-family: -apple-system, sans-serif; background: #f0f0f4; display: flex; justify-content: center; align-items: flex-start; padding: 40px 20px; gap: 24px; }
+  .card { background: white; border-radius: 16px; width: 380px; overflow: hidden; box-shadow: 0 16px 70px rgba(0,0,0,0.12); }
+  .header { padding: 20px 20px 12px; border-bottom: 1px solid #f0f0f4; }
+  .logo { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .logo-icon { width: 28px; height: 28px; background: #18181b; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 14px; }
+  .logo-text { font-size: 15px; font-weight: 600; color: #18181b; }
+  .logo-text span { color: #8b5cf6; }
+  .tabs { display: flex; gap: 2px; background: #f4f4f6; border-radius: 8px; padding: 2px; }
+  .tab { flex: 1; text-align: center; padding: 7px 4px; border-radius: 6px; font-size: 12px; color: #8b8b9e; }
+  .tab.active { background: white; color: #18181b; font-weight: 500; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  .content { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+  label { font-size: 11.5px; color: #8b8b9e; text-transform: uppercase; letter-spacing: 0.3px; font-weight: 500; display: block; margin-bottom: 6px; }
+  textarea { width: 100%; height: 90px; padding: 10px 12px; border: 1px solid #e8e8ec; border-radius: 8px; background: #fafafa; font-size: 13px; color: #18181b; resize: none; box-sizing: border-box; font-family: inherit; }
+
+  /* 推荐卡片 */
+  .recommend-card { border: 1px solid #e8e8ec; border-radius: 12px; background: #fafafa; padding: 12px; }
+  .rec-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .rec-title { display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #18181b; }
+  .rec-close { font-size: 11px; color: #c0c0cc; cursor: pointer; }
+  .rec-list { display: flex; flex-direction: column; gap: 8px; }
+  .rec-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 8px; background: white; }
+  .rec-item.primary { border: 1px solid rgba(24,24,27,0.2); box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+  .rec-item.secondary { border: 1px solid #e8e8ec; }
+  .rec-left { display: flex; align-items: center; gap: 10px; }
+  .rec-num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: white; flex-shrink: 0; }
+  .rec-name { font-size: 12.5px; font-weight: 500; color: #18181b; }
+  .rec-badge { font-size: 9.5px; padding: 2px 6px; border-radius: 20px; color: white; font-weight: 500; margin-left: 4px; }
+  .rec-reason { font-size: 11px; color: #8b8b9e; margin-top: 2px; line-height: 1.4; }
+  .rec-btn { font-size: 11px; font-weight: 500; color: #18181b; background: #f4f4f6; padding: 6px 10px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; gap: 4px; flex-shrink: 0; text-decoration: none; }
+  .aa-label { font-size: 10.5px; color: #c0c0cc; text-align: center; margin-top: 8px; }
+
+  /* Optimize btn */
+  .optimize-btn { width: 100%; padding: 10px; background: #18181b; color: white; border-radius: 8px; font-size: 13.5px; font-weight: 500; text-align: center; cursor: pointer; }
+
+  /* 右侧说明 */
+  .desc { width: 260px; padding-top: 20px; }
+  .desc h2 { font-size: 18px; font-weight: 700; color: #18181b; margin-bottom: 8px; }
+  .desc p { font-size: 13px; color: #5a5a72; line-height: 1.7; margin-bottom: 16px; }
+  .task-list { display: flex; flex-direction: column; gap: 8px; }
+  .task-item { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #2a2a30; }
+  .task-icon { width: 28px; height: 28px; border-radius: 8px; background: #f4f4f6; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<!-- 插件 UI -->
+<div class="card">
+  <div class="header">
+    <div class="logo">
+      <div class="logo-icon">✦</div>
+      <span class="logo-text">prompt<span>.</span>ai</span>
+      <span style="font-size:11px;background:#f4f4f6;color:#8b8b9e;padding:2px 8px;border-radius:20px;margin-left:auto">v1.2</span>
+    </div>
+    <div class="tabs">
+      <div class="tab active">✦ 优化</div>
+      <div class="tab">⏱ 历史</div>
+      <div class="tab">📊 洞察</div>
+      <div class="tab">⚙ 设置</div>
+    </div>
+  </div>
+
+  <div class="content">
+    <!-- 输入框 -->
+    <div>
+      <label>你的提示词</label>
+      <textarea>帮我写一个 Python 函数，输入一个列表，返回其中所有偶数的平方和</textarea>
+      <div style="font-size:11px;color:#c0c0cc;margin-top:4px;text-align:right">38 字符</div>
+    </div>
+
+    <!-- 🌟 Phase 4 推荐卡片 -->
+    <div class="recommend-card">
+      <div class="rec-header">
+        <div class="rec-title">💻 检测到：写代码任务</div>
+        <span class="rec-close">✕</span>
+      </div>
+      <div class="rec-list">
+        <!-- 推荐 #1 -->
+        <div class="rec-item primary">
+          <div class="rec-left">
+            <div class="rec-num" style="background:#18181b">1</div>
+            <div>
+              <div style="display:flex;align-items:center">
+                <span class="rec-name">MiniMax M2.7</span>
+                <span class="rec-badge" style="background:#18181b">性价比最高</span>
+              </div>
+              <div class="rec-reason">Code Arena Elo 全球第9，成本仅 Claude 的 1/10</div>
+            </div>
+          </div>
+          <a href="https://agent.minimax.io" class="rec-btn" target="_blank">去用 →</a>
+        </div>
+        <!-- 推荐 #2 -->
+        <div class="rec-item secondary">
+          <div class="rec-left">
+            <div class="rec-num" style="background:#6366f1">2</div>
+            <div>
+              <div style="display:flex;align-items:center">
+                <span class="rec-name">Claude Sonnet</span>
+                <span class="rec-badge" style="background:#6366f1">质量最高</span>
+              </div>
+              <div class="rec-reason">AA 第3，代码指令遵循最强</div>
+            </div>
+          </div>
+          <a href="https://claude.ai" class="rec-btn" target="_blank">去用 →</a>
+        </div>
+      </div>
+      <div class="aa-label">基于 Artificial Analysis 榜单</div>
+    </div>
+
+    <!-- 优化按钮 -->
+    <div class="optimize-btn">✦ 优化提示词 →</div>
+  </div>
+</div>
+
+<!-- 右侧说明 -->
+<div class="desc">
+  <h2>Phase 4<br>AI 推荐引擎</h2>
+  <p>输入 prompt 后自动识别任务类型，根据 <strong>AA 真实榜单数据</strong>推荐最适合的 AI 模型，直接点「去用」跳转。</p>
+
+  <div style="font-size:12px;color:#8b8b9e;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;margin-bottom:10px">可识别的任务类型</div>
+  <div class="task-list">
+    <div class="task-item"><div class="task-icon">💻</div> 写代码 → MiniMax M2.7 / Claude</div>
+    <div class="task-item"><div class="task-icon">✍️</div> 写作 → Claude / MiniMax M2.7</div>
+    <div class="task-item"><div class="task-icon">🔬</div> 推理分析 → Gemini / ChatGPT o3</div>
+    <div class="task-item"><div class="task-icon">📊</div> 数据分析 → ChatGPT o3 / MiniMax</div>
+    <div class="task-item"><div class="task-icon">🌐</div> 翻译 → DeepSeek / MiniMax</div>
+    <div class="task-item"><div class="task-icon">🤖</div> Agent 任务 → MiniMax M2.7</div>
+    <div class="task-item"><div class="task-icon">💬</div> 通用问答 → MiniMax M2.7</div>
+  </div>
+</div>
+
+</body>
+</html>

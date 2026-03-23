@@ -216,6 +216,80 @@ const LANGUAGES: { code: Lang; label: string; flag: string }[] = [
   { code: "zh", label: "中文", flag: "中" },
 ];
 
+// ─── Phase 4: 任务识别 + AI 推荐引擎（基于 AA 榜单）────────────────
+type TaskType = "code" | "writing" | "reasoning" | "data" | "translation" | "agent" | "general";
+
+type AIRecommendation = {
+  id: string;
+  name: string;
+  reason: string;
+  reasonZh: string;
+  badge: string;
+  badgeZh: string;
+  url: string;
+  color: string;
+};
+
+const TASK_KEYWORDS: Record<TaskType, string[]> = {
+  code: ["代码","code","函数","function","bug","debug","api","接口","程序","python","javascript","typescript","react","vue","sql","git","算法","algorithm","编程","开发","报错","error","implement","写一个类","写一个函数"],
+  writing: ["写一篇","写一封","邮件","email","文章","报告","总结","摘要","介绍","简历","cover letter","essay","blog","博客","新闻稿","公告","通知","说明书","文案","copywriting"],
+  reasoning: ["分析","为什么","推理","逻辑","证明","论证","科学","数学","物理","化学","why","because","reason","explain","hypothesis","哲学","辩论"],
+  data: ["数据","表格","excel","统计","图表","分析报告","data","chart","dashboard","可视化","趋势","增长率","转化率","同比","环比","指标"],
+  translation: ["翻译","translate","英文","中文","日文","korean","french","german","spanish","把这段","用英语","用中文","改成英文","改成中文"],
+  agent: ["自动化","workflow","流程","多步骤","agent","任务拆解","执行计划","帮我安排","帮我规划","step by step","分步"],
+  general: [],
+};
+
+const AI_RECOMMENDATIONS: Record<TaskType, AIRecommendation[]> = {
+  code: [
+    { id: "minimax", name: "MiniMax M2.7", reason: "Code Arena Elo global #9, 1/10 cost of Claude", reasonZh: "Code Arena Elo 全球第9，成本仅 Claude 的 1/10", badge: "Best Value", badgeZh: "性价比最高", url: "https://agent.minimax.io", color: "#18181b" },
+    { id: "claude", name: "Claude Sonnet", reason: "AA #3, top instruction following", reasonZh: "AA 第3，代码指令遵循最强", badge: "Top Quality", badgeZh: "质量最高", url: "https://claude.ai", color: "#6366f1" },
+  ],
+  writing: [
+    { id: "claude", name: "Claude Sonnet", reason: "AA #3, best long-form writing & tone", reasonZh: "AA 第3，长文写作和语气最自然", badge: "Best Writing", badgeZh: "写作最强", url: "https://claude.ai", color: "#6366f1" },
+    { id: "minimax", name: "MiniMax M2.7", reason: "AA ~50, great Chinese writing, 1/10 cost", reasonZh: "AA ~50，中文写作优秀，成本低", badge: "Best Value", badgeZh: "性价比最高", url: "https://agent.minimax.io", color: "#18181b" },
+  ],
+  reasoning: [
+    { id: "gemini", name: "Gemini 2.5 Pro", reason: "AA #1 (57), top reasoning & science", reasonZh: "AA 第1（57分），推理和科学最强", badge: "AA #1", badgeZh: "AA 第一", url: "https://gemini.google.com", color: "#1a73e8" },
+    { id: "chatgpt", name: "ChatGPT o3", reason: "AA #2 (57), advanced reasoning", reasonZh: "AA 第2（57分），复杂推理极强", badge: "AA #2", badgeZh: "AA 第二", url: "https://chat.openai.com", color: "#10a37f" },
+  ],
+  data: [
+    { id: "chatgpt", name: "ChatGPT o3", reason: "AA #2, best data analysis + Code Interpreter", reasonZh: "AA 第2，数据分析+代码执行最强", badge: "AA #2", badgeZh: "AA 第二", url: "https://chat.openai.com", color: "#10a37f" },
+    { id: "minimax", name: "MiniMax M2.7", reason: "GDPval-AA ELO1495, office tasks #1", reasonZh: "GDPval-AA ELO1495，办公场景第一", badge: "Office #1", badgeZh: "办公第一", url: "https://agent.minimax.io", color: "#18181b" },
+  ],
+  translation: [
+    { id: "deepseek", name: "DeepSeek", reason: "AA ~48, excellent multilingual, very cheap", reasonZh: "AA ~48，多语言优秀，价格极低", badge: "Best Value", badgeZh: "性价比最高", url: "https://chat.deepseek.com", color: "#4d6bfe" },
+    { id: "minimax", name: "MiniMax M2.7", reason: "Strong Chinese-English, low cost", reasonZh: "中英互译出色，成本低", badge: "CN Best", badgeZh: "中文最佳", url: "https://agent.minimax.io", color: "#18181b" },
+  ],
+  agent: [
+    { id: "minimax", name: "MiniMax M2.7", reason: "Toolathon multi-agent top tier, 97% instruction follow", reasonZh: "Toolathon 多智能体第一梯队，指令遵从率97%", badge: "Agent #1", badgeZh: "Agent 最强", url: "https://agent.minimax.io", color: "#18181b" },
+    { id: "claude", name: "Claude Sonnet", reason: "AA #3, excellent multi-step task handling", reasonZh: "AA 第3，多步骤任务处理出色", badge: "Top Quality", badgeZh: "质量最高", url: "https://claude.ai", color: "#6366f1" },
+  ],
+  general: [
+    { id: "minimax", name: "MiniMax M2.7", reason: "AA ~50, best price-performance ratio", reasonZh: "AA ~50，性价比最高的全能模型", badge: "Best Value", badgeZh: "性价比最高", url: "https://agent.minimax.io", color: "#18181b" },
+    { id: "gemini", name: "Gemini 2.5 Pro", reason: "AA #1, top overall intelligence", reasonZh: "AA 第1，综合能力最强", badge: "AA #1", badgeZh: "AA 第一", url: "https://gemini.google.com", color: "#1a73e8" },
+  ],
+};
+
+const TASK_LABELS: Record<TaskType, { zh: string; en: string; icon: string }> = {
+  code:        { zh: "写代码",   en: "Coding",      icon: "💻" },
+  writing:     { zh: "写作",     en: "Writing",     icon: "✍️" },
+  reasoning:   { zh: "推理分析", en: "Reasoning",   icon: "🔬" },
+  data:        { zh: "数据分析", en: "Data",        icon: "📊" },
+  translation: { zh: "翻译",     en: "Translation", icon: "🌐" },
+  agent:       { zh: "自动化",   en: "Agent Task",  icon: "🤖" },
+  general:     { zh: "通用问答", en: "General",     icon: "💬" },
+};
+
+function detectTaskType(text: string): TaskType {
+  const lower = text.toLowerCase();
+  for (const [task, keywords] of Object.entries(TASK_KEYWORDS) as [TaskType, string[]][]) {
+    if (task === "general") continue;
+    if (keywords.some(kw => lower.includes(kw))) return task;
+  }
+  return "general";
+}
+
 // ─── Mock Analytics Data ────────────────────────────
 const usageTrendData = [
   { name: "Mon", count: 12 },
@@ -621,6 +695,20 @@ export default function Sidebar() {
 
   const [fillStatus, setFillStatus] = useState("");
 
+  // Phase 4: 任务检测
+  const [detectedTask, setDetectedTask] = useState<TaskType | null>(null);
+  const [showRecommendation, setShowRecommendation] = useState(true);
+
+  useEffect(() => {
+    if (inputText.trim().length > 15) {
+      const task = detectTaskType(inputText);
+      setDetectedTask(task);
+      setShowRecommendation(true);
+    } else {
+      setDetectedTask(null);
+    }
+  }, [inputText]);
+
   const handleFillToChat = async () => {
     if (!optimizedText) return;
     try {
@@ -928,6 +1016,94 @@ export default function Sidebar() {
                   </div>
                 </div>
               </div>
+
+              {/* Phase 4: AI 推荐卡片 */}
+              <AnimatePresence>
+                {detectedTask && showRecommendation && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -8, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: "auto" }}
+                    exit={{ opacity: 0, y: -8, height: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="rounded-xl border border-[#e8e8ec] bg-[#fafafa] p-3">
+                      {/* 任务类型标题 */}
+                      <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[13px]">{TASK_LABELS[detectedTask].icon}</span>
+                          <span className="text-[12px] text-[#18181b]" style={{ fontWeight: 600 }}>
+                            {lang === "zh"
+                              ? `检测到：${TASK_LABELS[detectedTask].zh}任务`
+                              : `Detected: ${TASK_LABELS[detectedTask].en} Task`}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => setShowRecommendation(false)}
+                          className="text-[11px] text-[#c0c0cc] hover:text-[#8b8b9e] transition-colors px-1"
+                        >
+                          ✕
+                        </button>
+                      </div>
+
+                      {/* 推荐卡片列表 */}
+                      <div className="flex flex-col gap-2">
+                        {AI_RECOMMENDATIONS[detectedTask].map((rec, i) => (
+                          <div
+                            key={rec.id}
+                            className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${
+                              i === 0
+                                ? "border-[#18181b]/20 bg-white shadow-[0_1px_4px_rgba(0,0,0,0.06)]"
+                                : "border-[#e8e8ec] bg-white"
+                            }`}
+                          >
+                            <div className="flex items-center gap-2.5">
+                              {/* 排名 */}
+                              <span
+                                className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white flex-shrink-0"
+                                style={{ background: rec.color, fontWeight: 700 }}
+                              >
+                                {i + 1}
+                              </span>
+                              <div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[12.5px] text-[#18181b]" style={{ fontWeight: 500 }}>
+                                    {rec.name}
+                                  </span>
+                                  <span
+                                    className="text-[9.5px] px-1.5 py-0.5 rounded-full text-white"
+                                    style={{ background: rec.color, fontWeight: 500 }}
+                                  >
+                                    {lang === "zh" ? rec.badgeZh : rec.badge}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-[#8b8b9e] mt-0.5" style={{ lineHeight: "1.4" }}>
+                                  {lang === "zh" ? rec.reasonZh : rec.reason}
+                                </p>
+                              </div>
+                            </div>
+                            <a
+                              href={rec.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center gap-1 text-[11px] text-[#18181b] bg-[#f4f4f6] hover:bg-[#18181b] hover:text-white px-2.5 py-1.5 rounded-lg transition-all flex-shrink-0 ml-2"
+                              style={{ fontWeight: 500 }}
+                            >
+                              {lang === "zh" ? "去用" : "Open"}
+                              <ArrowRight size={10} />
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* AA 来源标注 */}
+                      <p className="text-[10.5px] text-[#c0c0cc] mt-2 text-center">
+                        {lang === "zh" ? "基于 Artificial Analysis 榜单" : "Based on Artificial Analysis rankings"}
+                      </p>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               {/* Optimize Button */}
               <button
