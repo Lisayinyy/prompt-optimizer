@@ -461,7 +461,7 @@ export default function Sidebar() {
     setHistoryLoading(true);
     const { data, error } = await supabase
       .from("prompts")
-      .select("id, original_text, optimized_text, diagnosis, platform, tone, created_at")
+      .select("id, original_text, optimized_text, diagnosis, platform, tone, task_type, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
     if (!error && data) setRealHistory(data as PromptRecord[]);
@@ -682,6 +682,7 @@ export default function Sidebar() {
           diagnosis: data.diagnosis || null,
           platform: selectedTarget !== "any" ? selectedTarget : null,
           tone: selectedTone,
+          task_type: detectedTask || "general",
         }).then(() => {}).catch(() => {});
       }
     } catch (err) {
@@ -1718,6 +1719,63 @@ export default function Sidebar() {
                               ))}
                             </div>
                           </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Task Breakdown — 真实数据 */}
+                  {(() => {
+                    const taskCount: Record<string, number> = {};
+                    realHistory.forEach(r => {
+                      const t = (r as any).task_type || "general";
+                      taskCount[t] = (taskCount[t] || 0) + 1;
+                    });
+                    const total = realHistory.length;
+                    if (total === 0) return null;
+
+                    const taskColors: Record<string, string> = {
+                      code: "#18181b", writing: "#6366f1", reasoning: "#8b5cf6",
+                      data: "#0ea5e9", translation: "#10b981", agent: "#f59e0b", general: "#d1d5db",
+                    };
+                    const taskEntries = Object.entries(taskCount)
+                      .sort((a, b) => b[1] - a[1])
+                      .map(([type, count]) => ({
+                        type,
+                        count,
+                        pct: Math.round((count / total) * 100),
+                        label: lang === "zh" ? TASK_LABELS[type as TaskType]?.zh || type : TASK_LABELS[type as TaskType]?.en || type,
+                        icon: TASK_LABELS[type as TaskType]?.icon || "💬",
+                        color: taskColors[type] || "#d1d5db",
+                      }));
+
+                    return (
+                      <div>
+                        <label className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block" style={{ fontWeight: 500 }}>
+                          {lang === "zh" ? "任务类型分布" : "Task Breakdown"}
+                        </label>
+                        <div className="flex flex-col gap-2">
+                          {taskEntries.map(task => (
+                            <div key={task.type} className="flex items-center gap-3 bg-[#fafafa] border border-[#e8e8ec] rounded-lg px-3 py-2.5">
+                              <span className="text-[14px] flex-shrink-0">{task.icon}</span>
+                              <div className="flex-1">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[12.5px] text-[#2a2a30]">{task.label}</span>
+                                  <span className="text-[12px] text-[#18181b]" style={{ fontWeight: 500 }}>{task.pct}%</span>
+                                </div>
+                                <div className="w-full h-1.5 bg-[#e8e8ec] rounded-full overflow-hidden">
+                                  <motion.div
+                                    className="h-full rounded-full"
+                                    style={{ background: task.color }}
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${task.pct}%` }}
+                                    transition={{ duration: 0.8, ease: "easeOut" }}
+                                  />
+                                </div>
+                              </div>
+                              <span className="text-[11px] text-[#8b8b9e] flex-shrink-0">{task.count}{lang === "zh" ? "次" : "x"}</span>
+                            </div>
+                          ))}
                         </div>
                       </div>
                     );
