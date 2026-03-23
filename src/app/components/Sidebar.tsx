@@ -418,6 +418,61 @@ export default function Sidebar() {
       (r.optimized_text || "").toLowerCase().includes(historySearch.toLowerCase())
   );
 
+  // 按日期分组
+  const groupedHistory = (() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const weekStart = todayStart - 6 * 86400000;
+    const groups: { label: string; items: typeof filteredHistory }[] = [];
+    const today = filteredHistory.filter(r => new Date(r.created_at).getTime() >= todayStart);
+    const thisWeek = filteredHistory.filter(r => {
+      const t = new Date(r.created_at).getTime();
+      return t >= weekStart && t < todayStart;
+    });
+    const earlier = filteredHistory.filter(r => new Date(r.created_at).getTime() < weekStart);
+    if (today.length) groups.push({ label: lang === "zh" ? "今天" : "Today", items: today });
+    if (thisWeek.length) groups.push({ label: lang === "zh" ? "本周" : "This Week", items: thisWeek });
+    if (earlier.length) groups.push({ label: lang === "zh" ? "更早" : "Earlier", items: earlier });
+    return groups;
+  })();
+
+  // ── 真实统计数据 ──
+  type RealStats = {
+    totalPrompts: number;
+    streak: number;
+  };
+  const [realStats, setRealStats] = useState<RealStats>({ totalPrompts: 0, streak: 0 });
+
+  const fetchStats = async () => {
+    if (!user) return;
+    // 总数
+    const { count } = await supabase
+      .from("prompts")
+      .select("*", { count: "exact", head: true });
+    // 连续天数：读最近30天的记录，算连续有记录的天数
+    const { data: recent } = await supabase
+      .from("prompts")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(200);
+    let streak = 0;
+    if (recent && recent.length > 0) {
+      const days = new Set(recent.map(r => new Date(r.created_at).toDateString()));
+      const today = new Date();
+      for (let i = 0; i < 30; i++) {
+        const d = new Date(today);
+        d.setDate(today.getDate() - i);
+        if (days.has(d.toDateString())) streak++;
+        else break;
+      }
+    }
+    setRealStats({ totalPrompts: count ?? 0, streak });
+  };
+
+  useEffect(() => {
+    if (isLoggedIn) fetchStats();
+  }, [isLoggedIn, realHistory]);
+
   const t = (key: string) => i18n[lang][key] ?? key;
 
   const historyItems = lang === "zh"
@@ -1082,10 +1137,22 @@ export default function Sidebar() {
                       )}
                     </div>
                   ) : (
-                    /* 历史列表 */
-                    <div className="flex flex-col gap-2.5">
-                      {filteredHistory.map((item, i) => {
-                        const isExpanded = expandedHistory === i;
+                    /* 历史列表（按日期分组）*/
+                    <div className="flex flex-col gap-4">
+                      {groupedHistory.map((group) => (
+                        <div key={group.label}>
+                          {/* 分组标题 */}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-[11px] text-[#8b8b9e] uppercase tracking-[0.4px]" style={{ fontWeight: 600 }}>
+                              {group.label}
+                            </span>
+                            <div className="flex-1 h-px bg-[#f0f0f4]" />
+                            <span className="text-[11px] text-[#c0c0cc]">{group.items.length}</span>
+                          </div>
+                          <div className="flex flex-col gap-2.5">
+                      {group.items.map((item, i) => {
+                        const uid = `${group.label}-${i}`;
+                        const isExpanded = expandedHistory === (groupedHistory.indexOf(group) * 1000 + i);
                         return (
                           <motion.div
                             key={item.id}
@@ -1094,7 +1161,7 @@ export default function Sidebar() {
                           >
                             {/* Header */}
                             <button
-                              onClick={() => setExpandedHistory(isExpanded ? null : i)}
+                              onClick={() => setExpandedHistory(isExpanded ? null : (groupedHistory.indexOf(group) * 1000 + i))}
                               className="text-left w-full p-3.5 group"
                             >
                               <div className="flex items-center justify-between mb-1.5">
@@ -1205,6 +1272,9 @@ export default function Sidebar() {
                           </motion.div>
                         );
                       })}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </>
@@ -1259,7 +1329,7 @@ export default function Sidebar() {
                       </div>
                       <div className="flex items-baseline gap-1.5 mb-1">
                         <span className="text-[32px] tracking-[-1px]" style={{ fontWeight: 700 }}>
-                          247
+                          {realStats.totalPrompts}
                         </span>
                         <span className="text-[12px] text-white/60">
                           {t("promptsThisMonth")}
@@ -1277,10 +1347,10 @@ export default function Sidebar() {
                   {/* Stats row */}
                   <div className="grid grid-cols-4 gap-2">
                     {[
-                      { label: t("totalPrompts"), value: "1,247", icon: MessageSquare },
-                      { label: t("totalHours"), value: "68h", icon: Clock },
+                      { label: t("totalPrompts"), value: realStats.totalPrompts.toLocaleString(), icon: MessageSquare },
+                      { label: t("totalHours"), value: `${Math.round(realStats.totalPrompts * 0.05)}h`, icon: Clock },
                       { label: t("avgScore"), value: "91", icon: Target },
-                      { label: t("streak"), value: "14", icon: Zap },
+                      { label: t("streak"), value: String(realStats.streak), icon: Zap },
                     ].map((stat) => (
                       <div
                         key={stat.label}
