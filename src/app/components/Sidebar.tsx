@@ -356,7 +356,16 @@ export default function Sidebar() {
   const [addExamples, setAddExamples] = useState(false);
   const [autoOptimize, setAutoOptimize] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isGuest, setIsGuest] = useState(false);
   const [user, setUser] = useState<User | null>(null);
+
+  // 登录弹窗状态
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
 
   // 检查登录状态
   useEffect(() => {
@@ -439,9 +448,33 @@ export default function Sidebar() {
     }
   };
 
+  const handleEmailAuth = async () => {
+    setAuthError("");
+    setAuthLoading(true);
+    try {
+      if (authMode === "signup") {
+        const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+        if (error) { setAuthError(error.message); }
+        else { setAuthError(lang === "zh" ? "注册成功！请查收验证邮件" : "Signed up! Please check your email."); }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+        if (error) { setAuthError(lang === "zh" ? "邮箱或密码错误" : "Invalid email or password"); }
+        else { setShowAuthModal(false); }
+      }
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleGuestMode = () => {
+    setIsGuest(true);
+    setShowAuthModal(false);
+  };
+
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setIsLoggedIn(false);
+    setIsGuest(false);
     setUser(null);
   };
   const [expandedHistory, setExpandedHistory] = useState<number | null>(null);
@@ -1281,7 +1314,7 @@ export default function Sidebar() {
                       : "Sign in to access all your optimized prompts anytime"}
                   </p>
                   <button
-                    onClick={handleGoogleSignIn}
+                    onClick={() => { setShowAuthModal(true); setAuthMode("signin"); setAuthError(""); }}
                     className="flex items-center gap-2 bg-[#18181b] text-white px-6 py-2.5 rounded-lg text-[13px] hover:bg-[#2a2a30] active:scale-[0.98] transition-all shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
                     style={{ fontWeight: 500 }}
                   >
@@ -1497,7 +1530,7 @@ export default function Sidebar() {
                     {t("loginForInsightsDesc")}
                   </p>
                   <button
-                    onClick={handleGoogleSignIn}
+                    onClick={() => { setShowAuthModal(true); setAuthMode("signin"); setAuthError(""); }}
                     className="flex items-center gap-2 bg-[#18181b] text-white px-6 py-2.5 rounded-lg text-[13px] hover:bg-[#2a2a30] active:scale-[0.98] transition-all shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
                     style={{ fontWeight: 500 }}
                   >
@@ -2071,7 +2104,7 @@ Keep it up! Better prompts = Better AI outputs 🚀
                   </div>
                 ) : (
                   <button
-                    onClick={handleGoogleSignIn}
+                    onClick={() => { setShowAuthModal(true); setAuthMode("signin"); setAuthError(""); }}
                     className="w-full flex items-center justify-center gap-2 py-2.5 border border-[#e8e8ec] rounded-lg text-[13px] text-[#5a5a72] hover:text-[#18181b] hover:border-[#c8c8d4] transition-colors"
                   >
                     <LogIn size={13} />
@@ -2134,6 +2167,211 @@ Keep it up! Better prompts = Better AI outputs 🚀
           </div>
         </div>
       </div>
+
+      {/* ── Auth Modal ── */}
+      {showAuthModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center"
+          style={{ background: "oklch(0% 0 0 / 0.5)", backdropFilter: "blur(4px)" }}
+          onClick={() => setShowAuthModal(false)}
+        >
+          <div
+            className="relative w-full max-w-[400px] flex flex-col"
+            style={{
+              background: "oklch(99% 0.004 250)",
+              borderRadius: "20px 20px 0 0",
+              boxShadow: "0 -8px 40px oklch(0% 0 0 / 0.12), 0 -1px 0 oklch(85% 0.01 250)",
+              padding: "28px 24px 32px",
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* 顶部拖拽条 */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full" style={{ background: "oklch(82% 0.01 250)" }} />
+
+            {/* 关闭按钮 */}
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 w-7 h-7 flex items-center justify-center rounded-full transition-colors"
+              style={{ background: "oklch(93% 0.008 250)", color: "oklch(50% 0.01 250)" }}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 1l10 10M11 1L1 11" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
+            </button>
+
+            {/* 头部：品牌 + 文案 */}
+            <div className="mb-6 mt-2">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="w-8 h-8 rounded-[10px] flex items-center justify-center" style={{ background: "oklch(18% 0.01 250)" }}>
+                  <Sparkles size={15} className="text-white" />
+                </div>
+                <span className="text-[13px]" style={{ color: "oklch(45% 0.01 250)", fontWeight: 500, letterSpacing: "0.01em" }}>prompt.ai</span>
+              </div>
+              <h2 style={{ fontSize: "22px", fontWeight: 700, color: "oklch(15% 0.01 250)", lineHeight: 1.2, letterSpacing: "-0.02em" }}>
+                {lang === "zh" ? (authMode === "signup" ? "创建账号" : "欢迎回来") : (authMode === "signup" ? "Create account" : "Welcome back")}
+              </h2>
+              <p style={{ fontSize: "13px", color: "oklch(52% 0.01 250)", marginTop: "4px" }}>
+                {lang === "zh"
+                  ? (authMode === "signup" ? "注册后解锁历史记录与使用洞察" : "登录后查看你的提示词历史与洞察")
+                  : (authMode === "signup" ? "Unlock history & insights" : "Sign in to view your history & insights")}
+              </p>
+            </div>
+
+            {/* Google 登录 */}
+            <button
+              onClick={() => { setShowAuthModal(false); handleGoogleSignIn(); }}
+              className="w-full flex items-center justify-center gap-2.5 transition-all active:scale-[0.98]"
+              style={{
+                padding: "11px 16px",
+                borderRadius: "12px",
+                border: "1px solid oklch(88% 0.01 250)",
+                background: "oklch(99% 0.004 250)",
+                fontSize: "13.5px",
+                fontWeight: 500,
+                color: "oklch(18% 0.01 250)",
+                boxShadow: "0 1px 3px oklch(0% 0 0 / 0.06)",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = "oklch(96% 0.008 250)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "oklch(99% 0.004 250)"; }}
+            >
+              <svg width="17" height="17" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.6 32.8 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.5 6.5 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.5 19 12 24 12c3.1 0 5.8 1.1 7.9 3l5.7-5.7C34.5 6.5 29.6 4 24 4 16.3 4 9.7 8.4 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.3 35.3 26.8 36 24 36c-5.3 0-9.7-3.2-11.4-7.8L6 33.5C9.3 39.7 16.1 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.3-2.3 4.2-4.3 5.6l6.2 5.2C41.3 35.1 44 30 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
+              {lang === "zh" ? "用 Google 账号继续" : "Continue with Google"}
+            </button>
+
+            {/* 分隔线 */}
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px" style={{ background: "oklch(90% 0.008 250)" }} />
+              <span style={{ fontSize: "11px", color: "oklch(65% 0.01 250)", letterSpacing: "0.04em" }}>
+                {lang === "zh" ? "或用邮箱" : "OR WITH EMAIL"}
+              </span>
+              <div className="flex-1 h-px" style={{ background: "oklch(90% 0.008 250)" }} />
+            </div>
+
+            {/* 邮箱 + 密码 */}
+            <div className="flex flex-col gap-2.5">
+              <div className="relative">
+                <input
+                  type="email"
+                  value={authEmail}
+                  onChange={e => setAuthEmail(e.target.value)}
+                  placeholder={lang === "zh" ? "邮箱地址" : "Email address"}
+                  style={{
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: "10px",
+                    border: "1px solid oklch(88% 0.01 250)",
+                    background: "oklch(98% 0.005 250)",
+                    fontSize: "13.5px",
+                    color: "oklch(15% 0.01 250)",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    transition: "border-color 0.15s",
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = "oklch(50% 0.02 250)"; e.currentTarget.style.boxShadow = "0 0 0 3px oklch(85% 0.02 250)"; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "oklch(88% 0.01 250)"; e.currentTarget.style.boxShadow = "none"; }}
+                />
+              </div>
+              <div className="relative">
+                <input
+                  type="password"
+                  value={authPassword}
+                  onChange={e => setAuthPassword(e.target.value)}
+                  placeholder={lang === "zh" ? "密码（至少 6 位）" : "Password (min 6 chars)"}
+                  style={{
+                    width: "100%",
+                    padding: "11px 14px",
+                    borderRadius: "10px",
+                    border: "1px solid oklch(88% 0.01 250)",
+                    background: "oklch(98% 0.005 250)",
+                    fontSize: "13.5px",
+                    color: "oklch(15% 0.01 250)",
+                    outline: "none",
+                    boxSizing: "border-box",
+                    transition: "border-color 0.15s",
+                  }}
+                  onFocus={e => { e.currentTarget.style.borderColor = "oklch(50% 0.02 250)"; e.currentTarget.style.boxShadow = "0 0 0 3px oklch(85% 0.02 250)"; }}
+                  onBlur={e => { e.currentTarget.style.borderColor = "oklch(88% 0.01 250)"; e.currentTarget.style.boxShadow = "none"; }}
+                  onKeyDown={e => { if (e.key === "Enter") handleEmailAuth(); }}
+                />
+              </div>
+            </div>
+
+            {/* 错误/成功提示 */}
+            {authError && (
+              <div
+                className="mt-3 px-3 py-2 rounded-lg text-[12px] text-center"
+                style={{
+                  background: authError.includes("成功") || authError.includes("check")
+                    ? "oklch(95% 0.05 145)" : "oklch(95% 0.05 20)",
+                  color: authError.includes("成功") || authError.includes("check")
+                    ? "oklch(35% 0.12 145)" : "oklch(40% 0.15 20)",
+                }}
+              >
+                {authError}
+              </div>
+            )}
+
+            {/* 主按钮 */}
+            <button
+              onClick={handleEmailAuth}
+              disabled={authLoading || !authEmail || !authPassword}
+              className="w-full mt-3 transition-all active:scale-[0.98]"
+              style={{
+                padding: "12px 16px",
+                borderRadius: "12px",
+                background: authLoading || !authEmail || !authPassword
+                  ? "oklch(75% 0.01 250)" : "oklch(18% 0.01 250)",
+                color: "white",
+                fontSize: "13.5px",
+                fontWeight: 600,
+                letterSpacing: "0.01em",
+                cursor: authLoading || !authEmail || !authPassword ? "not-allowed" : "pointer",
+                border: "none",
+              }}
+            >
+              {authLoading
+                ? (lang === "zh" ? "处理中..." : "Processing...")
+                : authMode === "signin"
+                  ? (lang === "zh" ? "登录" : "Sign in")
+                  : (lang === "zh" ? "创建账号" : "Create account")}
+            </button>
+
+            {/* 切换登录/注册 */}
+            <div className="flex items-center justify-center gap-1.5 mt-4">
+              <span style={{ fontSize: "12.5px", color: "oklch(55% 0.01 250)" }}>
+                {authMode === "signin"
+                  ? (lang === "zh" ? "还没有账号？" : "Don't have an account?")
+                  : (lang === "zh" ? "已有账号？" : "Already have an account?")}
+              </span>
+              <button
+                onClick={() => { setAuthMode(authMode === "signin" ? "signup" : "signin"); setAuthError(""); }}
+                style={{ fontSize: "12.5px", fontWeight: 600, color: "oklch(35% 0.02 250)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              >
+                {authMode === "signin"
+                  ? (lang === "zh" ? "注册" : "Sign up")
+                  : (lang === "zh" ? "登录" : "Sign in")}
+              </button>
+            </div>
+
+            {/* 游客模式 */}
+            <button
+              onClick={handleGuestMode}
+              className="w-full mt-3 transition-colors"
+              style={{
+                padding: "9px",
+                borderRadius: "10px",
+                background: "transparent",
+                border: "none",
+                fontSize: "12px",
+                color: "oklch(62% 0.01 250)",
+                cursor: "pointer",
+              }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = "oklch(30% 0.01 250)"; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = "oklch(62% 0.01 250)"; }}
+            >
+              {lang === "zh" ? "以游客身份继续，暂不登录 →" : "Continue as guest, skip for now →"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
