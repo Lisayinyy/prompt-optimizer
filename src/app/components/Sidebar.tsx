@@ -359,6 +359,18 @@ export default function Sidebar() {
   const [isGuest, setIsGuest] = useState(false);
   const [user, setUser] = useState<User | null>(null);
 
+  // 获取头像 URL：优先 OAuth 头像，其次 Gravatar，最后默认
+  const getAvatarUrl = (u: typeof user): string | null => {
+    if (!u) return null;
+    if (u.user_metadata?.avatar_url) return u.user_metadata.avatar_url;
+    if (u.email) {
+      // Gravatar: 用 DiceBear 做 fallback（无需 MD5，直接生成唯一头像）
+      const seed = encodeURIComponent(u.email);
+      return `https://api.dicebear.com/9.x/initials/svg?seed=${seed}&backgroundColor=18181b&textColor=ffffff&fontSize=38`;
+    }
+    return null;
+  };
+
   // 登录弹窗状态
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
@@ -900,10 +912,10 @@ export default function Sidebar() {
           </div>
           <div className="flex items-center gap-2">
             {isLoggedIn && (
-              user?.user_metadata?.avatar_url ? (
-                <img src={user.user_metadata.avatar_url} className="w-6 h-6 rounded-full" alt="" />
+              getAvatarUrl(user) ? (
+                <img src={getAvatarUrl(user)!} className="w-6 h-6 rounded-full object-cover" alt="" />
               ) : (
-                <div className="w-6 h-6 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                <div className="w-6 h-6 rounded-full bg-[#18181b] flex items-center justify-center">
                   <User size={11} className="text-white" />
                 </div>
               )
@@ -2078,10 +2090,10 @@ Keep it up! Better prompts = Better AI outputs 🚀
                 {isLoggedIn ? (
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2.5">
-                      {user?.user_metadata?.avatar_url ? (
-                        <img src={user.user_metadata.avatar_url} className="w-8 h-8 rounded-full" alt="" />
+                      {getAvatarUrl(user) ? (
+                        <img src={getAvatarUrl(user)!} className="w-8 h-8 rounded-full object-cover" alt="" />
                       ) : (
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-indigo-600 flex items-center justify-center">
+                        <div className="w-8 h-8 rounded-full bg-[#18181b] flex items-center justify-center">
                           <User size={14} className="text-white" />
                         </div>
                       )}
