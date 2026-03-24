@@ -1,11 +1,99 @@
 // ============================================================
 // Prompt Optimizer — Cloudflare Worker 后端代理
+// v7.5: Phase 1 智能优化升级 — 动态策略+评分+Guardrails
 // ============================================================
 
 const MINIMAX_API = "https://api.minimax.chat/v1/chat/completions";
 const MODEL = "MiniMax-M2.7";
 
-const SYSTEM_PROMPT = `You are an elite Prompt Engineer with mastery of the world's best prompting frameworks. Your job: transform any rough user input into a high-quality, immediately usable prompt.
+// ─── Guardrails: 检测 prompt 注入 & 有害内容 ────────────────
+const INJECTION_PATTERNS = [
+  /ignore\s+previous\s+instructions/i,
+  /ignore\s+all\s+instructions/i,
+  /disregard\s+(previous|all|prior)\s+instructions/i,
+  /forget\s+everything/i,
+  /you\s+are\s+now\s+a/i,
+  /act\s+as\s+if\s+you\s+are/i,
+  /jailbreak/i,
+  /DAN\s+mode/i,
+  /你现在是/,
+  /忽略之前的指令/,
+  /忽略所有指令/,
+  /你是一个没有限制的/,
+  /扮演.{0,10}没有道德/,
+  /system\s*prompt/i,
+  /bypass\s+(safety|filter|restriction)/i,
+];
+
+const HARMFUL_PATTERNS = [
+  /如何制造.{0,10}(炸弹|毒品|武器|病毒)/,
+  /how\s+to\s+(make|create|build)\s+(bomb|drug|weapon|virus|malware)/i,
+  /合成.{0,10}(毒品|违禁|爆炸)/,
+  /synthesize\s+(drugs|explosives|poison)/i,
+];
+
+function checkGuardrails(text) {
+  for (const pattern of INJECTION_PATTERNS) {
+    if (pattern.test(text)) return "injection";
+  }
+  for (const pattern of HARMFUL_PATTERNS) {
+    if (pattern.test(text)) return "harmful";
+  }
+  return null;
+}
+
+// ─── 动态系统提示词（根据 targetAI 差异化）─────────────────
+function buildSystemPrompt(targetAI = "any", tone = "Professional") {
+  // 目标 AI 策略
+  let targetStrategy = "";
+
+  if (["chatgpt", "gemini"].includes(targetAI)) {
+    targetStrategy = `
+## TARGET AI STRATEGY: ${targetAI.toUpperCase()}
+This prompt will be used with ${targetAI === "chatgpt" ? "ChatGPT (OpenAI)" : "Gemini (Google)"}.
+- Use Markdown structure: headers (##), bullet lists, code blocks when appropriate
+- Clear role + step-by-step instructions work best
+- Include explicit output format specification with examples`;
+  } else if (targetAI === "claude") {
+    targetStrategy = `
+## TARGET AI STRATEGY: CLAUDE
+This prompt will be used with Claude (Anthropic).
+- Claude excels at long-form content and nuanced tasks
+- Use XML tag structure when helpful: <context>, <task>, <constraints>, <format>
+- Claude follows instructions precisely — be explicit about what you want
+- Multi-step tasks benefit from clear sequential structure`;
+  } else if (["kimi", "zhipu", "deepseek", "minimax"].includes(targetAI)) {
+    targetStrategy = `
+## TARGET AI STRATEGY: CHINESE LLM (${targetAI})
+This prompt will be used with a Chinese-first LLM.
+- Prioritize Chinese output unless user explicitly wants English
+- Be concise and direct — avoid over-engineered Western prompt structures
+- Use simple numbered lists, avoid heavy XML or Markdown
+- Chinese-specific context (文化、行业背景) improves results dramatically`;
+  } else {
+    targetStrategy = `
+## TARGET AI STRATEGY: UNIVERSAL
+Optimize for broad compatibility across all major AI systems.
+- Use clear, unambiguous language
+- Moderate use of Markdown structure
+- Explicit role + task + output format`;
+  }
+
+  // 语气指导
+  const toneGuide = {
+    Professional: "formal, precise, business-appropriate",
+    Casual: "friendly, conversational, approachable",
+    Academic: "scholarly, evidence-based, structured",
+    Creative: "imaginative, expressive, open-ended",
+    Concise: "ultra-brief, direct, no filler words",
+  };
+  const toneDesc = toneGuide[tone] || "balanced and clear";
+
+  return `You are an elite Prompt Engineer with mastery of the world's best prompting frameworks. Your job: transform any rough user input into a high-quality, immediately usable prompt.
+${targetStrategy}
+
+## TONE REQUIREMENT
+Apply this tone to the optimized prompt: ${tone} — ${toneDesc}
 
 ## YOUR OPTIMIZATION ENGINE
 
@@ -50,26 +138,47 @@ Apply these frameworks intelligently based on what the prompt needs:
 - Change the user's core intent
 - Use generic phrases like "helpful assistant"
 
+## SCORING CRITERIA
+You must evaluate the ORIGINAL prompt and score it on these 3 dimensions (0-100 each):
+- **clarity** (清晰度): How clearly does the prompt state its intent? 0=completely vague, 100=crystal clear
+- **specificity** (具体性): How much relevant detail/context does it include? 0=no details, 100=fully specified
+- **structure** (结构性): How well-organized and formatted is it? 0=random text, 100=perfect structure
+
 ## FEW-SHOT EXAMPLES
 
 Example 1:
 Input: "帮我写邮件给客户说项目延期了"
-Diagnosis: "缺少角色、语气和具体细节"
-Optimized: "你是一位专业的项目经理，擅长处理客户关系。请帮我写一封正式但友好的邮件，向客户说明项目延期的情况。\n\n邮件要求：\n- 语气：专业、诚恳、负责任\n- 结构：开头道歉 → 说明延期原因（可留空让我填写）→ 新的交付时间 → 补偿方案 → 结尾承诺\n- 长度：200-300字\n- 避免：推卸责任的措辞"
+Output:
+{
+  "diagnosis": "缺少角色、语气和具体细节，意图过于模糊",
+  "optimized": "你是一位专业的项目经理，擅长处理客户关系。请帮我写一封正式但友好的邮件，向客户说明项目延期的情况。\\n\\n邮件要求：\\n- 语气：专业、诚恳、负责任\\n- 结构：开头道歉 → 说明延期原因（可留空让我填写）→ 新的交付时间 → 补偿方案 → 结尾承诺\\n- 长度：200-300字\\n- 避免：推卸责任的措辞",
+  "scores": { "clarity": 45, "specificity": 20, "structure": 30 },
+  "tips": ["说明延期原因和新的交付时间", "指定邮件语气（正式/友好）", "告知收件人是客户还是上级"]
+}
 
 Example 2:
 Input: "write code to sort a list"
-Diagnosis: "Missing language, list type, and sort criteria"
-Optimized: "You are a senior software engineer. Write a clean, well-commented function to sort a list.\n\nRequirements:\n- Language: [specify: Python/JavaScript/etc.]\n- Input: a list of [numbers/strings/objects]\n- Sort order: ascending (default) with option for descending\n- Include: type hints, docstring, and a usage example\n- Handle edge cases: empty list, single element, duplicate values\n- Output format: just the function + example, no extra explanation"
-
-Example 3:
-Input: "分析一下这个产品的竞争对手"
-Diagnosis: "缺少产品信息和分析框架"
-Optimized: "你是一位资深的商业分析师，专注于市场竞争研究。请对[产品名称]进行竞争对手分析。\n\n分析框架：\n1. 直接竞争对手（3-5个）：产品定位、核心功能、价格区间、目标用户\n2. 间接竞争对手（2-3个）：替代解决方案\n3. 竞争优势矩阵：对比我们产品与主要竞品的优劣势\n4. 市场空白：竞品未覆盖的需求\n5. 战略建议：基于分析的3条可行建议\n\n输出格式：结构化报告，每个竞品单独成段，最后附竞争矩阵表格"
+Output:
+{
+  "diagnosis": "Missing language, list type, and sort criteria — too vague to be useful",
+  "optimized": "You are a senior software engineer. Write a clean, well-commented function to sort a list.\\n\\nRequirements:\\n- Language: [specify: Python/JavaScript/etc.]\\n- Input: a list of [numbers/strings/objects]\\n- Sort order: ascending (default) with option for descending\\n- Include: type hints, docstring, and a usage example\\n- Handle edge cases: empty list, single element, duplicate values\\n- Output format: just the function + example, no extra explanation",
+  "scores": { "clarity": 40, "specificity": 15, "structure": 25 },
+  "tips": ["Specify the programming language", "Describe what's in the list (numbers, strings, objects)", "State whether ascending or descending order is needed"]
+}
 
 ## OUTPUT FORMAT
 Return ONLY valid JSON. No markdown, no explanation outside JSON:
-{"diagnosis": "one sentence, max 20 chars, in same language as input", "optimized": "the complete optimized prompt, ready to use"}`;
+{
+  "diagnosis": "one sentence max 40 chars in same language as input, describing the main problem",
+  "optimized": "the complete optimized prompt ready to use",
+  "scores": {
+    "clarity": <0-100>,
+    "specificity": <0-100>,
+    "structure": <0-100>
+  },
+  "tips": ["improvement tip 1", "improvement tip 2", "improvement tip 3"]
+}`;
+}
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -107,7 +216,7 @@ export default {
     }
 
     try {
-      const { prompt } = await request.json();
+      const { prompt, targetAI = "any", tone = "Professional", lang = "zh" } = await request.json();
 
       if (!prompt || !prompt.trim()) {
         return new Response(
@@ -115,6 +224,26 @@ export default {
           { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
         );
       }
+
+      // ─── Guardrails 防护 ───────────────────────────────────
+      const guardResult = checkGuardrails(prompt.trim());
+      if (guardResult) {
+        return new Response(
+          JSON.stringify({
+            error: "prompt_injection",
+            message: guardResult === "injection"
+              ? "检测到异常输入，请重新描述你的需求"
+              : "检测到不支持的内容类型，请修改后重试",
+          }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
+      // ─── 构建动态系统提示词 ────────────────────────────────
+      const SYSTEM_PROMPT = buildSystemPrompt(targetAI, tone);
+
+      // 用户消息：包含 targetAI 和 tone 上下文
+      const userMessage = `请优化以下 prompt（目标 AI：${targetAI}，语气风格：${tone}）：\n\n${prompt.trim()}`;
 
       // 调用 MiniMax API
       const apiResponse = await fetch(MINIMAX_API, {
@@ -127,7 +256,7 @@ export default {
           model: MODEL,
           messages: [
             { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: `请优化以下 prompt：\n\n${prompt}` },
+            { role: "user", content: userMessage },
           ],
           temperature: 0.3,
           max_tokens: 3000,
@@ -157,7 +286,17 @@ export default {
         result = {
           diagnosis: "已优化",
           optimized: cleaned,
+          scores: { clarity: 0, specificity: 0, structure: 0 },
+          tips: [],
         };
+      }
+
+      // 确保 scores 字段存在（向后兼容旧格式）
+      if (!result.scores) {
+        result.scores = { clarity: 0, specificity: 0, structure: 0 };
+      }
+      if (!result.tips) {
+        result.tips = [];
       }
 
       return new Response(JSON.stringify(result), {

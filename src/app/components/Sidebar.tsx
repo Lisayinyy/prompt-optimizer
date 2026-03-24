@@ -732,6 +732,8 @@ export default function Sidebar() {
   const targetObj = AI_TARGETS.find((t) => t.id === selectedTarget)!;
 
   const [diagnosis, setDiagnosis] = useState("");
+  const [scores, setScores] = useState<{ clarity: number; specificity: number; structure: number } | null>(null);
+  const [tips, setTips] = useState<string[]>([]);
 
   const API_URL = "https://prompt-optimizer-api.prompt-optimizer.workers.dev";
 
@@ -740,21 +742,46 @@ export default function Sidebar() {
     setIsOptimizing(true);
     setOptimizedText("");
     setDiagnosis("");
+    setScores(null);
+    setTips([]);
 
     try {
       const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: inputText.trim() }),
+        body: JSON.stringify({
+          prompt: inputText.trim(),
+          targetAI: selectedTarget,
+          tone: selectedTone,
+          lang,
+        }),
       });
+
+      const data = await res.json();
+
+      // Guardrails 拦截
+      if (data.error === "prompt_injection") {
+        setOptimizedText(data.message || (lang === "zh" ? "检测到异常输入，请重新描述你的需求" : "Suspicious input detected, please rephrase"));
+        return;
+      }
 
       if (!res.ok) throw new Error("服务异常");
 
-      const data = await res.json();
       if (data.diagnosis && data.diagnosis !== "已优化") {
-        setDiagnosis(data.diagnosis);
+        // 支持最多 40 字的诊断信息
+        setDiagnosis(data.diagnosis.slice(0, 40));
       }
       setOptimizedText(data.optimized || data.error || "未返回结果");
+
+      // 接收 scores
+      if (data.scores && typeof data.scores.clarity === "number") {
+        setScores(data.scores);
+      }
+
+      // 接收 tips
+      if (Array.isArray(data.tips) && data.tips.length > 0) {
+        setTips(data.tips.slice(0, 3));
+      }
 
       // 存入数据库（已登录时）
       if (user && data.optimized) {
@@ -1299,17 +1326,17 @@ export default function Sidebar() {
                       {[
                         {
                           label: t("clarity"),
-                          value: "+85%",
+                          value: scores ? `${scores.clarity}` : "—",
                           color: "text-emerald-500",
                         },
                         {
                           label: t("specificity"),
-                          value: "+72%",
+                          value: scores ? `${scores.specificity}` : "—",
                           color: "text-blue-500",
                         },
                         {
                           label: t("structure"),
-                          value: "+90%",
+                          value: scores ? `${scores.structure}` : "—",
                           color: "text-violet-500",
                         },
                       ].map((stat) => (
@@ -1329,6 +1356,17 @@ export default function Sidebar() {
                         </div>
                       ))}
                     </div>
+                    {/* Tips 显示区域 */}
+                    {tips.length > 0 && (
+                      <div className="mt-3 flex flex-col gap-1.5">
+                        {tips.map((tip, i) => (
+                          <div key={i} className="flex items-start gap-2 px-3 py-2 bg-[#f4f4f6] rounded-lg">
+                            <span className="text-[11px] text-[#8b8b9e] flex-shrink-0 mt-0.5">💡</span>
+                            <span className="text-[12px] text-[#5a5a72]" style={{ lineHeight: "1.5" }}>{tip}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </AnimatePresence>
