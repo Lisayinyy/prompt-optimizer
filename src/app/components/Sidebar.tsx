@@ -376,6 +376,7 @@ export default function Sidebar() {
   const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authInviteCode, setAuthInviteCode] = useState("");
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
@@ -465,9 +466,42 @@ export default function Sidebar() {
     setAuthLoading(true);
     try {
       if (authMode === "signup") {
-        const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
-        if (error) { setAuthError(error.message); }
-        else { setAuthError(lang === "zh" ? "注册成功！请查收验证邮件" : "Signed up! Please check your email."); }
+        // 验证邀请码
+        const code = authInviteCode.trim().toUpperCase();
+        if (!code) {
+          setAuthError(lang === "zh" ? "请输入邀请码" : "Please enter an invite code");
+          return;
+        }
+        const { data: codeData, error: codeError } = await supabase
+          .from("invite_codes")
+          .select("id, used")
+          .eq("code", code)
+          .single();
+
+        if (codeError || !codeData) {
+          setAuthError(lang === "zh" ? "邀请码无效，请检查是否输入正确" : "Invalid invite code");
+          return;
+        }
+        if (codeData.used) {
+          setAuthError(lang === "zh" ? "该邀请码已被使用" : "This invite code has already been used");
+          return;
+        }
+
+        // 注册
+        const { data: signUpData, error } = await supabase.auth.signUp({ email: authEmail, password: authPassword });
+        if (error) {
+          setAuthError(error.message);
+          return;
+        }
+
+        // 标记邀请码已使用
+        await supabase
+          .from("invite_codes")
+          .update({ used: true, used_by: authEmail, used_at: new Date().toISOString() })
+          .eq("id", codeData.id);
+
+        setAuthError(lang === "zh" ? "🎉 注册成功！请查收验证邮件" : "🎉 Signed up! Please check your email.");
+        void signUpData;
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
         if (error) { setAuthError(lang === "zh" ? "邮箱或密码错误" : "Invalid email or password"); }
@@ -2304,6 +2338,35 @@ Keep it up! Better prompts = Better AI outputs 🚀
                   onKeyDown={e => { if (e.key === "Enter") handleEmailAuth(); }}
                 />
               </div>
+              {/* 邀请码（仅注册时显示） */}
+              {authMode === "signup" && (
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={authInviteCode}
+                    onChange={e => setAuthInviteCode(e.target.value.toUpperCase())}
+                    placeholder={lang === "zh" ? "邀请码（如 PAI-XXXX-XXXX）" : "Invite code (e.g. PAI-XXXX-XXXX)"}
+                    style={{
+                      width: "100%",
+                      padding: "11px 14px",
+                      borderRadius: "10px",
+                      border: "1px solid oklch(82% 0.02 60)",
+                      background: "oklch(98% 0.008 60)",
+                      fontSize: "13.5px",
+                      color: "oklch(15% 0.01 250)",
+                      outline: "none",
+                      boxSizing: "border-box",
+                      letterSpacing: "0.05em",
+                      fontWeight: 500,
+                      transition: "border-color 0.15s",
+                    }}
+                    onFocus={e => { e.currentTarget.style.borderColor = "oklch(55% 0.08 60)"; e.currentTarget.style.boxShadow = "0 0 0 3px oklch(88% 0.05 60)"; }}
+                    onBlur={e => { e.currentTarget.style.borderColor = "oklch(82% 0.02 60)"; e.currentTarget.style.boxShadow = "none"; }}
+                    onKeyDown={e => { if (e.key === "Enter") handleEmailAuth(); }}
+                  />
+                  <span style={{ position: "absolute", right: "12px", top: "50%", transform: "translateY(-50%)", fontSize: "14px" }}>🎫</span>
+                </div>
+              )}
             </div>
 
             {/* 错误/成功提示 */}
