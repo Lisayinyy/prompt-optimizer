@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>You're in — prompt.ai</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: oklch(97% 0.006 250);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+
+  .card {
+    background: oklch(99.5% 0.003 250);
+    border-radius: 24px;
+    box-shadow:
+      0 1px 0 oklch(88% 0.01 250),
+      0 8px 40px oklch(0% 0 0 / 0.07);
+    padding: 56px 48px 48px;
+    max-width: 440px;
+    width: 100%;
+    text-align: center;
+  }
+
+  /* 动画圆圈 */
+  .success-ring {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: oklch(96% 0.04 145);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 28px;
+    animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0); opacity: 0; }
+    to   { transform: scale(1); opacity: 1; }
+  }
+
+  .checkmark {
+    width: 32px;
+    height: 32px;
+    stroke: oklch(42% 0.15 145);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+    stroke-dasharray: 50;
+    stroke-dashoffset: 50;
+    animation: drawCheck 0.4s 0.3s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  }
+
+  @keyframes drawCheck {
+    to { stroke-dashoffset: 0; }
+  }
+
+  /* 品牌 */
+  .brand {
+    font-size: 12px;
+    font-weight: 600;
+    color: oklch(62% 0.01 250);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    animation: fadeUp 0.4s 0.2s both;
+  }
+
+  /* 标题 */
+  h1 {
+    font-size: 28px;
+    font-weight: 750;
+    color: oklch(14% 0.01 250);
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    margin-bottom: 12px;
+    animation: fadeUp 0.4s 0.35s both;
+  }
+
+  /* 副文案 */
+  .subtitle {
+    font-size: 15px;
+    color: oklch(50% 0.01 250);
+    line-height: 1.65;
+    margin-bottom: 36px;
+    animation: fadeUp 0.4s 0.45s both;
+  }
+
+  /* Feature 列表 */
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 36px;
+    text-align: left;
+    animation: fadeUp 0.4s 0.5s both;
+  }
+
+  .feature-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: oklch(97% 0.005 250);
+    border-radius: 12px;
+    border: 1px solid oklch(92% 0.008 250);
+  }
+
+  .feature-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .feature-text {
+    font-size: 13.5px;
+    color: oklch(28% 0.01 250);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+
+  .feature-text span {
+    display: block;
+    font-size: 12px;
+    color: oklch(58% 0.01 250);
+    font-weight: 400;
+    margin-top: 1px;
+  }
+
+  /* CTA */
+  .cta-hint {
+    font-size: 13px;
+    color: oklch(55% 0.01 250);
+    line-height: 1.6;
+    animation: fadeUp 0.4s 0.6s both;
+  }
+
+  .cta-hint strong {
+    color: oklch(20% 0.01 250);
+  }
+
+  /* 分隔 */
+  .divider {
+    height: 1px;
+    background: oklch(92% 0.008 250);
+    margin: 32px 0;
+  }
+
+  /* Footer */
+  .footer {
+    font-size: 12px;
+    color: oklch(72% 0.01 250);
+    animation: fadeUp 0.4s 0.65s both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* 手机适配 */
+  @media (max-width: 480px) {
+    .card { padding: 40px 24px 36px; }
+    h1 { font-size: 24px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- 成功动画 -->
+  <div class="success-ring">
+    <svg class="checkmark" viewBox="0 0 24 24">
+      <polyline points="4,13 9,18 20,7"/>
+    </svg>
+  </div>
+
+  <p class="brand">✦ prompt.ai</p>
+
+  <h1>You're all set!</h1>
+
+  <p class="subtitle">
+    Your email has been verified successfully.<br>
+    Welcome to the prompt.ai community 🎉
+  </p>
+
+  <!-- 功能亮点 -->
+  <div class="features">
+    <div class="feature-item">
+      <span class="feature-icon">⚡</span>
+      <div class="feature-text">
+        Instant prompt optimization
+        <span>Transform vague prompts into precise, structured ones</span>
+      </div>
+    </div>
+    <div class="feature-item">
+      <span class="feature-icon">📊</span>
+      <div class="feature-text">
+        Usage insights & analytics
+        <span>Track your AI usage patterns and productivity gains</span>
+      </div>
+    </div>
+    <div class="feature-item">
+      <span class="feature-icon">🔄</span>
+      <div class="feature-text">
+        Auto-fill to any AI
+        <span>Works with ChatGPT, Claude, Gemini, Kimi and 15+ more</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 引导 -->
+  <p class="cta-hint">
+    Head back to your browser and open the<br>
+    <strong>prompt.ai extension</strong> to start optimizing. 🚀
+  </p>
+
+  <div class="divider"></div>
+
+  <p class="footer">
+    © 2025 prompt.ai · Questions? <a href="mailto:hi@prompt.ai" style="color:oklch(50% 0.01 250);">hi@prompt.ai</a>
+  </p>
+
+</div>
+
+</body>
+</html>
