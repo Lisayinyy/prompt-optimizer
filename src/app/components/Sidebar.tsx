@@ -734,8 +734,55 @@ export default function Sidebar() {
   const [diagnosis, setDiagnosis] = useState("");
   const [scores, setScores] = useState<{ clarity: number; specificity: number; structure: number } | null>(null);
   const [tips, setTips] = useState<string[]>([]);
+  const [isRefining, setIsRefining] = useState(false);
 
   const API_URL = "https://prompt-optimizer-api.prompt-optimizer.workers.dev";
+
+  // 快捷指令：基于已有结果做二次优化
+  const REFINE_ACTIONS = [
+    { key: "professional", labelZh: "更专业", labelEn: "More formal", emoji: "💼" },
+    { key: "concise",      labelZh: "更简洁", labelEn: "More concise", emoji: "✂️" },
+    { key: "specific",     labelZh: "更具体", labelEn: "More specific", emoji: "🎯" },
+    { key: "creative",     labelZh: "更创意", labelEn: "More creative", emoji: "✨" },
+  ];
+
+  const handleRefine = async (action: string) => {
+    if (!optimizedText || isRefining) return;
+    setIsRefining(true);
+
+    const actionPrompts: Record<string, string> = {
+      professional: lang === "zh" ? "请将以下 prompt 改写得更加专业、正式，使用行业术语" : "Make this prompt more professional and formal",
+      concise:      lang === "zh" ? "请将以下 prompt 精简，去掉冗余，保留核心意图" : "Make this prompt more concise, remove redundancy",
+      specific:     lang === "zh" ? "请将以下 prompt 改写得更具体，加入更多细节和约束条件" : "Make this prompt more specific with more details and constraints",
+      creative:     lang === "zh" ? "请将以下 prompt 改写得更有创意，更有启发性" : "Make this prompt more creative and inspiring",
+    };
+
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: `${actionPrompts[action]}：\n\n${optimizedText}`,
+          targetAI: selectedTarget,
+          tone: selectedTone,
+          lang,
+          isRefinement: true,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.optimized) {
+        setOptimizedText(data.optimized);
+        if (data.scores) setScores(data.scores);
+        if (Array.isArray(data.tips)) setTips(data.tips.slice(0, 3));
+        if (data.diagnosis) setDiagnosis(data.diagnosis.slice(0, 40));
+      }
+    } catch {
+      // 静默失败
+    } finally {
+      setIsRefining(false);
+    }
+  };
 
   const handleOptimize = async () => {
     if (!inputText.trim()) return;
@@ -1367,6 +1414,41 @@ export default function Sidebar() {
                         ))}
                       </div>
                     )}
+
+                    {/* 快捷二次优化指令 */}
+                    <div className="mt-3">
+                      <p className="text-[11px] text-[#c0c0cc] mb-2" style={{ letterSpacing: "0.02em" }}>
+                        {lang === "zh" ? "继续调整" : "Refine further"}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {REFINE_ACTIONS.map(action => (
+                          <button
+                            key={action.key}
+                            onClick={() => handleRefine(action.key)}
+                            disabled={isRefining}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[12px] transition-all active:scale-[0.97]"
+                            style={{
+                              borderColor: "oklch(88% 0.01 250)",
+                              background: isRefining ? "oklch(96% 0.005 250)" : "oklch(99% 0.004 250)",
+                              color: isRefining ? "oklch(72% 0.01 250)" : "oklch(28% 0.01 250)",
+                              fontWeight: 500,
+                              cursor: isRefining ? "not-allowed" : "pointer",
+                            }}
+                          >
+                            <span>{action.emoji}</span>
+                            <span>{lang === "zh" ? action.labelZh : action.labelEn}</span>
+                          </button>
+                        ))}
+                        {isRefining && (
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 text-[12px]" style={{ color: "oklch(62% 0.01 250)" }}>
+                            <motion.div animate={{ rotate: 360 }} transition={{ duration: 1, repeat: Infinity, ease: "linear" }}>
+                              <Sparkles size={11} />
+                            </motion.div>
+                            {lang === "zh" ? "优化中..." : "Refining..."}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
