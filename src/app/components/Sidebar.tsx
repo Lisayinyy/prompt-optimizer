@@ -377,6 +377,9 @@ export default function Sidebar() {
       options: {
         skipBrowserRedirect: true,
         redirectTo: "https://vyuzkbdxsweaqftyqifh.supabase.co/auth/v1/callback",
+        queryParams: {
+          prompt: "select_account",
+        },
       },
     });
     if (!data?.url) return;
