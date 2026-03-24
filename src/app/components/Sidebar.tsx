@@ -736,6 +736,35 @@ export default function Sidebar() {
   const [tips, setTips] = useState<string[]>([]);
   const [isRefining, setIsRefining] = useState(false);
 
+  // 对话历史（多轮上下文）
+  type ConvMessage = { role: "user" | "assistant"; content: string };
+  const conversationRef = useRef<ConvMessage[]>([]);
+  const lastInputRef = useRef<string>("");
+  const [isNewTopic, setIsNewTopic] = useState(false); // 是否刚切换了新话题
+
+  // 语义相似度检测（简单关键词重叠，不调 API）
+  const isSameTopic = (a: string, b: string): boolean => {
+    if (!a || !b) return false;
+    const tokenize = (s: string) => s.toLowerCase().split(/[\s，。！？,.\s]+/).filter(w => w.length > 1);
+    const setA = new Set(tokenize(a));
+    const setB = new Set(tokenize(b));
+    const intersection = [...setA].filter(w => setB.has(w)).length;
+    const union = new Set([...setA, ...setB]).size;
+    return union > 0 && intersection / union >= 0.25; // 25% 关键词重叠视为同一话题
+  };
+
+  // 手动开新话题
+  const handleNewTopic = () => {
+    conversationRef.current = [];
+    lastInputRef.current = "";
+    setIsNewTopic(true);
+    setOptimizedText("");
+    setDiagnosis("");
+    setScores(null);
+    setTips([]);
+    setTimeout(() => setIsNewTopic(false), 1500);
+  };
+
   const API_URL = "https://prompt-optimizer-api.prompt-optimizer.workers.dev";
 
   // 快捷指令：基于已有结果做二次优化
@@ -757,21 +786,28 @@ export default function Sidebar() {
       creative:     lang === "zh" ? "请将以下 prompt 改写得更有创意，更有启发性" : "Make this prompt more creative and inspiring",
     };
 
+    const refineInstruction = actionPrompts[action];
+
     try {
       const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: `${actionPrompts[action]}：\n\n${optimizedText}`,
+          prompt: refineInstruction,
           targetAI: selectedTarget,
           tone: selectedTone,
           lang,
           isRefinement: true,
+          messages: conversationRef.current.slice(-6), // 携带完整对话历史
         }),
       });
 
       const data = await res.json();
       if (data.optimized) {
+        // 把这次 refine 也追加到历史
+        conversationRef.current.push({ role: "user", content: refineInstruction });
+        conversationRef.current.push({ role: "assistant", content: data.optimized });
+
         setOptimizedText(data.optimized);
         if (data.scores) setScores(data.scores);
         if (Array.isArray(data.tips)) setTips(data.tips.slice(0, 3));
@@ -792,15 +828,27 @@ export default function Sidebar() {
     setScores(null);
     setTips([]);
 
+    const currentInput = inputText.trim();
+
+    // 自动话题检测：新输入和上一轮差异大 → 清空历史开新话题
+    if (lastInputRef.current && !isSameTopic(currentInput, lastInputRef.current)) {
+      conversationRef.current = [];
+    }
+    lastInputRef.current = currentInput;
+
+    // 构建消息历史（最多保留最近 6 条，避免 token 过多）
+    const historyMessages = conversationRef.current.slice(-6);
+
     try {
       const res = await fetch(API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: inputText.trim(),
+          prompt: currentInput,
           targetAI: selectedTarget,
           tone: selectedTone,
           lang,
+          messages: historyMessages, // 携带对话历史
         }),
       });
 
@@ -815,10 +863,15 @@ export default function Sidebar() {
       if (!res.ok) throw new Error("服务异常");
 
       if (data.diagnosis && data.diagnosis !== "已优化") {
-        // 支持最多 40 字的诊断信息
         setDiagnosis(data.diagnosis.slice(0, 40));
       }
-      setOptimizedText(data.optimized || data.error || "未返回结果");
+
+      const optimized = data.optimized || data.error || "未返回结果";
+      setOptimizedText(optimized);
+
+      // 把这轮对话追加到历史
+      conversationRef.current.push({ role: "user", content: currentInput });
+      conversationRef.current.push({ role: "assistant", content: optimized });
 
       // 接收 scores
       if (data.scores && typeof data.scores.clarity === "number") {
@@ -834,7 +887,7 @@ export default function Sidebar() {
       if (user && data.optimized) {
         supabase.from("prompts").insert({
           user_id: user.id,
-          original_text: inputText.trim(),
+          original_text: currentInput,
           optimized_text: data.optimized,
           diagnosis: data.diagnosis || null,
           platform: selectedTarget !== "any" ? selectedTarget : null,
@@ -842,7 +895,7 @@ export default function Sidebar() {
           task_type: detectedTask || "general",
         }).then(() => {}).catch(() => {});
       }
-    } catch (err) {
+    } catch {
       setOptimizedText(
         lang === "zh" ? "优化失败，请稍后重试" : "Optimization failed, please try again"
       );
@@ -945,6 +998,12 @@ export default function Sidebar() {
   const handleReset = () => {
     setInputText("");
     setOptimizedText("");
+    setDiagnosis("");
+    setScores(null);
+    setTips([]);
+    // 清除时也重置对话历史（开启新话题）
+    conversationRef.current = [];
+    lastInputRef.current = "";
   };
 
   const Toggle = ({
@@ -1417,9 +1476,21 @@ export default function Sidebar() {
 
                     {/* 快捷二次优化指令 */}
                     <div className="mt-3">
-                      <p className="text-[11px] text-[#c0c0cc] mb-2" style={{ letterSpacing: "0.02em" }}>
-                        {lang === "zh" ? "继续调整" : "Refine further"}
-                      </p>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-[11px] text-[#c0c0cc]" style={{ letterSpacing: "0.02em" }}>
+                          {lang === "zh"
+                            ? conversationRef.current.length > 2 ? `继续调整（第 ${Math.floor(conversationRef.current.length / 2)} 轮）` : "继续调整"
+                            : conversationRef.current.length > 2 ? `Refine (round ${Math.floor(conversationRef.current.length / 2)})` : "Refine further"}
+                        </p>
+                        {/* 新话题按钮 */}
+                        <button
+                          onClick={handleNewTopic}
+                          className="flex items-center gap-1 text-[11px] transition-colors"
+                          style={{ color: isNewTopic ? "oklch(42% 0.12 145)" : "oklch(65% 0.01 250)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          {isNewTopic ? "✅ 已开启新话题" : (lang === "zh" ? "🔄 新话题" : "🔄 New topic")}
+                        </button>
+                      </div>
                       <div className="flex flex-wrap gap-1.5">
                         {REFINE_ACTIONS.map(action => (
                           <button

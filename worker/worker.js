@@ -216,7 +216,7 @@ export default {
     }
 
     try {
-      const { prompt, targetAI = "any", tone = "Professional", lang = "zh" } = await request.json();
+      const { prompt, targetAI = "any", tone = "Professional", lang = "zh", messages = [], isRefinement = false } = await request.json();
 
       if (!prompt || !prompt.trim()) {
         return new Response(
@@ -242,8 +242,23 @@ export default {
       // ─── 构建动态系统提示词 ────────────────────────────────
       const SYSTEM_PROMPT = buildSystemPrompt(targetAI, tone);
 
-      // 用户消息：包含 targetAI 和 tone 上下文
-      const userMessage = `请优化以下 prompt（目标 AI：${targetAI}，语气风格：${tone}）：\n\n${prompt.trim()}`;
+      // ─── 构建消息列表（支持多轮对话历史）────────────────────
+      // 历史消息：最多保留最近 6 条，避免 token 过多
+      const validHistory = Array.isArray(messages)
+        ? messages.slice(-6).filter(m => m.role && m.content)
+        : [];
+
+      // 当前用户消息
+      const userMessage = isRefinement
+        ? prompt.trim() // 二次优化：直接用指令（前端已格式化）
+        : `请优化以下 prompt（目标 AI：${targetAI}，语气风格：${tone}）：\n\n${prompt.trim()}`;
+
+      // 组装完整消息数组：system + 历史 + 当前
+      const allMessages = [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...validHistory,
+        { role: "user", content: userMessage },
+      ];
 
       // 调用 MiniMax API
       const apiResponse = await fetch(MINIMAX_API, {
@@ -254,10 +269,7 @@ export default {
         },
         body: JSON.stringify({
           model: MODEL,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
+          messages: allMessages,
           temperature: 0.3,
           max_tokens: 3000,
         }),
