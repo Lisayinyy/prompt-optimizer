@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "prompt.ai",
   "version": "4.7.0",
-  "description": "AI Prompt Optimizer — 让小白也能写出专业 prompt",
+  "description": "AI Prompt Optimizer - powering AI prompts & agents",
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
