@@ -202,10 +202,156 @@ function cleanModelOutput(raw) {
   return text;
 }
 
+// ─── Resend 发送确认邮件 ────────────────────────────────────
+async function sendWaitlistEmail(email, lang, resendApiKey) {
+  const isZh = lang === "zh";
+  const subject = isZh
+    ? "🎉 你已成功加入 prompt.ai 候补名单！"
+    : "🎉 You're on the prompt.ai waitlist!";
+
+  const html = isZh ? `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: 'DM Sans', -apple-system, sans-serif; background: #fafafa; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #fff; border-radius: 16px; border: 1px solid #e4e4e7; padding: 40px;">
+    <div style="font-family: Georgia, serif; font-size: 1.4rem; color: #18181b; margin-bottom: 24px;">
+      <a href="https://prompt-ai.work" style="color: #18181b; text-decoration: none;">prompt<span style="color: #7c3aed;">.</span>ai</a>
+    </div>
+    <h1 style="font-family: Georgia, serif; font-size: 1.6rem; color: #18181b; margin: 0 0 16px; line-height: 1.3;">
+      你已成功加入候补名单 🎉
+    </h1>
+    <p style="color: #52525b; line-height: 1.7; margin: 0 0 24px;">
+      感谢你的关注！我们目前处于内测阶段，名额限 <strong>20 人</strong>。<br/>
+      名额开放时，我们会第一时间发邮件通知你。
+    </p>
+    <div style="background: #ede9fe; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px;">
+      <p style="color: #7c3aed; font-weight: 600; margin: 0 0 8px;"><a href="https://prompt-ai.work" style="color: #7c3aed; text-decoration: none;">prompt.ai</a> 能帮你做什么？</p>
+      <ul style="color: #52525b; margin: 0; padding-left: 20px; line-height: 1.8;">
+        <li>✦ 一键把粗糙想法优化成专业级提示词</li>
+        <li>→ 自动填充到 ChatGPT / Claude / Kimi 等 15+ 平台</li>
+        <li>↗ 智能推荐最适合你任务的 AI 模型</li>
+      </ul>
+    </div>
+    <p style="color: #a1a1aa; font-size: 0.85rem; margin: 0;">
+      有任何问题请回复此邮件或联系 <a href="mailto:lisayyyin@qq.com" style="color: #7c3aed;">lisayyyin@qq.com</a>
+    </p>
+  </div>
+</body>
+</html>` : `
+<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"></head>
+<body style="font-family: 'DM Sans', -apple-system, sans-serif; background: #fafafa; margin: 0; padding: 40px 20px;">
+  <div style="max-width: 520px; margin: 0 auto; background: #fff; border-radius: 16px; border: 1px solid #e4e4e7; padding: 40px;">
+    <div style="font-family: Georgia, serif; font-size: 1.4rem; color: #18181b; margin-bottom: 24px;">
+      <a href="https://prompt-ai.work" style="color: #18181b; text-decoration: none;">prompt<span style="color: #7c3aed;">.</span>ai</a>
+    </div>
+    <h1 style="font-family: Georgia, serif; font-size: 1.6rem; color: #18181b; margin: 0 0 16px; line-height: 1.3;">
+      You're on the waitlist! 🎉
+    </h1>
+    <p style="color: #52525b; line-height: 1.7; margin: 0 0 24px;">
+      Thanks for your interest in prompt.ai! We're currently in private beta,
+      limited to <strong>20 early users</strong>.<br/>
+      We'll email you as soon as your spot is ready.
+    </p>
+    <div style="background: #ede9fe; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px;">
+      <p style="color: #7c3aed; font-weight: 600; margin: 0 0 8px;"><a href="https://prompt-ai.work" style="color: #7c3aed; text-decoration: none;">prompt.ai</a> — What it does for you:</p>
+      <ul style="color: #52525b; margin: 0; padding-left: 20px; line-height: 1.8;">
+        <li>✦ Turn rough ideas into professional prompts in one click</li>
+        <li>→ Auto-fill into ChatGPT, Claude, Kimi & 15+ AI platforms</li>
+        <li>↗ Smart AI model recommendations based on your task</li>
+      </ul>
+    </div>
+    <p style="color: #a1a1aa; font-size: 0.85rem; margin: 0;">
+      Questions? Reply to this email or reach us at <a href="mailto:lisayyyin@qq.com" style="color: #7c3aed;">lisayyyin@qq.com</a>
+    </p>
+  </div>
+</body>
+</html>`;
+
+  return fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${resendApiKey}`,
+    },
+    body: JSON.stringify({
+      from: "prompt.ai <hi@prompt-ai.work>",
+      to: [email],
+      subject,
+      html,
+    }),
+  });
+}
+
+// ─── Supabase 写入 waitlist ─────────────────────────────────
+async function insertWaitlist(email, source, lang, supabaseUrl, supabaseKey) {
+  return fetch(`${supabaseUrl}/rest/v1/waitlist`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "apikey": supabaseKey,
+      "Authorization": `Bearer ${supabaseKey}`,
+      "Prefer": "return=minimal",
+    },
+    body: JSON.stringify({ email, source, lang, created_at: new Date().toISOString() }),
+  });
+}
+
 export default {
   async fetch(request, env) {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: CORS_HEADERS });
+    }
+
+    const url = new URL(request.url);
+
+    // ─── /waitlist 路由 ────────────────────────────────────
+    if (url.pathname === "/waitlist") {
+      if (request.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method not allowed" }), {
+          status: 405, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        const { email, source = "hero", lang = "en" } = await request.json();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return new Response(JSON.stringify({ error: "Invalid email" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+          });
+        }
+
+        // 写入 Supabase
+        const dbRes = await insertWaitlist(
+          email, source, lang,
+          env.SUPABASE_URL,
+          env.SUPABASE_ANON_KEY
+        );
+
+        // 409 = 邮箱已存在，也算成功
+        if (!dbRes.ok && dbRes.status !== 409) {
+          const errText = await dbRes.text();
+          console.error("Supabase error:", errText);
+          return new Response(JSON.stringify({ error: "Database error" }), {
+            status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+          });
+        }
+
+        // 发确认邮件（仅首次注册，409 不重发）
+        if (dbRes.ok || dbRes.status === 201) {
+          await sendWaitlistEmail(email, lang, env.RESEND_API_KEY);
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        console.error("Waitlist error:", err);
+        return new Response(JSON.stringify({ error: "Server error" }), {
+          status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
     }
 
     if (request.method !== "POST") {

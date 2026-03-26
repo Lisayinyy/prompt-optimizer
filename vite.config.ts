@@ -22,11 +22,16 @@ export default defineConfig({
   assetsInclude: ['**/*.svg', '**/*.csv'],
 
   build: {
+    outDir: 'extension',
+    emptyOutDir: false,
     rollupOptions: {
+      input: path.resolve(__dirname, 'src/main.tsx'),
       output: {
-        entryFileNames: 'assets/[name].js',
+        entryFileNames: 'assets/index.js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name].[ext]',
+        format: 'iife',
+        name: 'PromptAI',
       },
     },
   },

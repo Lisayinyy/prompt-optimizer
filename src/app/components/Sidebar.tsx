@@ -885,6 +885,7 @@ export default function Sidebar() {
 
       // 存入数据库（已登录时）
       if (user && data.optimized) {
+        setFeedback(null); // 重置反馈状态
         supabase.from("prompts").insert({
           user_id: user.id,
           original_text: currentInput,
@@ -893,7 +894,9 @@ export default function Sidebar() {
           platform: selectedTarget !== "any" ? selectedTarget : null,
           tone: selectedTone,
           task_type: detectedTask || "general",
-        }).then(() => {}).catch(() => {});
+        }).select("id").single().then(({ data: row }) => {
+          if (row?.id) lastPromptIdRef.current = row.id;
+        }).catch(() => {});
       }
     } catch {
       setOptimizedText(
@@ -905,6 +908,21 @@ export default function Sidebar() {
   };
 
   const [fillStatus, setFillStatus] = useState("");
+  const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
+  const lastPromptIdRef = useRef<string | null>(null);
+
+  const handleFeedback = async (value: "up" | "down") => {
+    setFeedback(value);
+    // 写入 Supabase feedback 表
+    if (user && lastPromptIdRef.current) {
+      supabase.from("prompt_feedback").insert({
+        user_id: user.id,
+        prompt_id: lastPromptIdRef.current,
+        rating: value === "up" ? 1 : -1,
+        created_at: new Date().toISOString(),
+      }).then(() => {}).catch(() => {});
+    }
+  };
 
   // Phase 4: 任务检测
   const [detectedTask, setDetectedTask] = useState<TaskType | null>(null);
@@ -1417,6 +1435,7 @@ export default function Sidebar() {
                             </>
                           )}
                         </button>
+
                       </div>
                     </div>
                     <div className="relative">
@@ -1428,7 +1447,7 @@ export default function Sidebar() {
                         {optimizedText}
                       </div>
                     </div>
-                    <div className="flex gap-3 mt-3">
+                    <div className="flex items-center gap-3 mt-3">
                       {[
                         {
                           label: t("clarity"),
@@ -1461,6 +1480,31 @@ export default function Sidebar() {
                           </div>
                         </div>
                       ))}
+                      {/* 👍/👎 反馈按钮，放评分行右侧 */}
+                      <div className="flex items-center gap-1 ml-auto">
+                        <button
+                          onClick={() => handleFeedback("up")}
+                          title={lang === "zh" ? "有帮助" : "Helpful"}
+                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-[14px] transition-all ${
+                            feedback === "up"
+                              ? "bg-emerald-100"
+                              : "hover:bg-[#f0f0f4] opacity-40 hover:opacity-100"
+                          }`}
+                        >
+                          👍
+                        </button>
+                        <button
+                          onClick={() => handleFeedback("down")}
+                          title={lang === "zh" ? "不够好" : "Not helpful"}
+                          className={`w-7 h-7 flex items-center justify-center rounded-lg text-[14px] transition-all ${
+                            feedback === "down"
+                              ? "bg-red-100"
+                              : "hover:bg-[#f0f0f4] opacity-40 hover:opacity-100"
+                          }`}
+                        >
+                          👎
+                        </button>
+                      </div>
                     </div>
                     {/* Tips 显示区域 */}
                     {tips.length > 0 && (
