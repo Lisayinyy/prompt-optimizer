@@ -533,6 +533,10 @@ export default function Sidebar() {
     diagnosis: string | null;
     platform: string | null;
     tone: string | null;
+    task_type?: string | null;
+    score_clarity?: number | null;
+    score_specificity?: number | null;
+    score_structure?: number | null;
     created_at: string;
   };
   const [realHistory, setRealHistory] = useState<PromptRecord[]>([]);
@@ -544,7 +548,7 @@ export default function Sidebar() {
     setHistoryLoading(true);
     const { data, error } = await supabase
       .from("prompts")
-      .select("id, original_text, optimized_text, diagnosis, platform, tone, task_type, created_at")
+      .select("id, original_text, optimized_text, diagnosis, platform, tone, task_type, score_clarity, score_specificity, score_structure, created_at")
       .order("created_at", { ascending: false })
       .limit(50);
     if (!error && data) setRealHistory(data as PromptRecord[]);
@@ -886,6 +890,11 @@ export default function Sidebar() {
       // 存入数据库（已登录时）
       if (user && data.optimized) {
         setFeedback(null); // 重置反馈状态
+        const scoreData = data.scores && typeof data.scores.clarity === "number" ? {
+          score_clarity: data.scores.clarity,
+          score_specificity: data.scores.specificity,
+          score_structure: data.scores.structure,
+        } : {};
         supabase.from("prompts").insert({
           user_id: user.id,
           original_text: currentInput,
@@ -894,6 +903,7 @@ export default function Sidebar() {
           platform: selectedTarget !== "any" ? selectedTarget : null,
           tone: selectedTone,
           task_type: detectedTask || "general",
+          ...scoreData,
         }).select("id").single().then(({ data: row }) => {
           if (row?.id) lastPromptIdRef.current = row.id;
         }).catch(() => {});
@@ -1850,11 +1860,28 @@ export default function Sidebar() {
                     <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
                     <div className="absolute bottom-0 left-0 w-20 h-20 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />
                     <div className="relative">
-                      <div className="flex items-center gap-1.5 mb-3">
-                        <Calendar size={12} className="text-violet-300" />
-                        <span className="text-[11px] text-violet-300 tracking-[0.3px] uppercase" style={{ fontWeight: 500 }}>
-                          {t("monthlyReport")}
-                        </span>
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={12} className="text-violet-300" />
+                          <span className="text-[11px] text-violet-300 tracking-[0.3px] uppercase" style={{ fontWeight: 500 }}>
+                            {t("monthlyReport")}
+                          </span>
+                        </div>
+                        {/* 最擅长任务角标 */}
+                        {(() => {
+                          const taskCount: Record<string, number> = {};
+                          realHistory.forEach(r => { const tt = r.task_type || "general"; taskCount[tt] = (taskCount[tt] || 0) + 1; });
+                          const topTask = Object.entries(taskCount).sort((a, b) => b[1] - a[1])[0]?.[0];
+                          if (!topTask || topTask === "general") return null;
+                          const label = TASK_LABELS[topTask as TaskType];
+                          if (!label) return null;
+                          return (
+                            <span className="flex items-center gap-1 bg-white/10 rounded-full px-2 py-0.5 text-[10px] text-white/70">
+                              <span>{label.icon}</span>
+                              <span>{lang === "zh" ? label.zh : label.en}</span>
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div className="flex items-baseline gap-1.5 mb-1">
                         <span className="text-[32px] tracking-[-1px]" style={{ fontWeight: 700 }}>
@@ -1864,13 +1891,29 @@ export default function Sidebar() {
                           {t("promptsThisMonth")}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <Zap size={12} className="text-emerald-400" />
-                        <span className="text-[12px] text-emerald-400">
-                          {lang === "zh"
-                            ? `连续 ${realStats.streak} 天使用`
-                            : `${realStats.streak} day streak`}
-                        </span>
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-1">
+                          <Zap size={12} className="text-emerald-400" />
+                          <span className="text-[12px] text-emerald-400">
+                            {lang === "zh"
+                              ? `连续 ${realStats.streak} 天使用`
+                              : `${realStats.streak} day streak`}
+                          </span>
+                        </div>
+                        {/* 平均质量分 */}
+                        {(() => {
+                          const scoredRecords = realHistory.filter(r => r.score_clarity != null);
+                          if (scoredRecords.length === 0) return null;
+                          const avg = Math.round(scoredRecords.reduce((sum, r) => sum + ((r.score_clarity! + r.score_specificity! + r.score_structure!) / 3), 0) / scoredRecords.length);
+                          return (
+                            <div className="flex items-center gap-1">
+                              <TrendingUp size={12} className="text-violet-300" />
+                              <span className="text-[12px] text-violet-300">
+                                {lang === "zh" ? `平均质量 ${avg}分` : `Avg quality ${avg}`}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2139,109 +2182,185 @@ export default function Sidebar() {
                     );
                   })()}
 
-                  {/* 发送周报按钮 */}
+                  {/* ── AI 质量趋势图 ── */}
                   {(() => {
-                    const handleSendReport = () => {
-                      const now = new Date();
-                      const weekStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()-6} - ${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}`;
-                      const topPlatform = (() => {
-                        const countMap: Record<string, number> = {};
-                        realHistory.forEach(r => {
-                          const p = r.platform && r.platform !== "any" ? r.platform : "其他";
-                          countMap[p] = (countMap[p] || 0) + 1;
-                        });
-                        const sorted = Object.entries(countMap).sort((a,b) => b[1]-a[1]);
-                        return sorted[0]?.[0] || "-";
-                      })();
+                    // 只显示有 score 的记录
+                    const scoredHistory = realHistory.filter(r =>
+                      r.score_clarity != null && r.score_specificity != null && r.score_structure != null
+                    );
+                    if (scoredHistory.length < 2) return null;
+                    // 最近 10 条，按时间正序
+                    const recent = [...scoredHistory].reverse().slice(-10);
+                    const trendData = recent.map((r, i) => ({
+                      idx: i + 1,
+                      avg: Math.round(((r.score_clarity! + r.score_specificity! + r.score_structure!) / 3)),
+                    }));
+                    const firstAvg = trendData[0]?.avg ?? 0;
+                    const lastAvg = trendData[trendData.length - 1]?.avg ?? 0;
+                    const improving = lastAvg >= firstAvg;
+                    return (
+                      <div>
+                        <label className="text-[11.5px] text-[#8b8b9e] tracking-[0.3px] uppercase mb-3 block" style={{ fontWeight: 500 }}>
+                          {lang === "zh" ? "Prompt 质量趋势" : "Quality Trend"}
+                        </label>
+                        <div className="bg-[#fafafa] border border-[#e8e8ec] rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] text-[#8b8b9e]">
+                              {lang === "zh" ? `平均分 ${lastAvg}` : `Avg score ${lastAvg}`}
+                            </span>
+                            <span className={`text-[11px] flex items-center gap-0.5 ${improving ? "text-emerald-500" : "text-orange-400"}`}>
+                              {improving ? "↗" : "→"} {improving
+                                ? (lang === "zh" ? "持续提升" : "Improving")
+                                : (lang === "zh" ? "保持稳定" : "Steady")}
+                            </span>
+                          </div>
+                          <ResponsiveContainer width="100%" height={80}>
+                            <AreaChart data={trendData}>
+                              <defs>
+                                <linearGradient id="qualityGrad" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.2} />
+                                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                                </linearGradient>
+                              </defs>
+                              <XAxis dataKey="idx" hide />
+                              <YAxis domain={[0, 100]} hide />
+                              <Tooltip
+                                contentStyle={{ background: "#18181b", border: "none", borderRadius: 8, fontSize: 11, color: "#fff", padding: "4px 8px" }}
+                                formatter={(v: number) => [`${v}分`, lang === "zh" ? "平均质量" : "Avg Quality"]}
+                                labelFormatter={() => ""}
+                              />
+                              <Area type="monotone" dataKey="avg" stroke="#6366f1" strokeWidth={2} fill="url(#qualityGrad)" dot={{ fill: "#6366f1", r: 3, strokeWidth: 0 }} />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
-                      const peakHour = (() => {
+                  {/* ── AI 个性化洞察 ── */}
+                  {(() => {
+                    if (realHistory.length < 3) return null;
+                    // 最擅长任务
+                    const taskCount: Record<string, number> = {};
+                    realHistory.forEach(r => { const t = r.task_type || "general"; taskCount[t] = (taskCount[t] || 0) + 1; });
+                    const topTask = Object.entries(taskCount).sort((a, b) => b[1] - a[1])[0]?.[0] || "general";
+                    const topTaskLabel = lang === "zh" ? TASK_LABELS[topTask as TaskType]?.zh || topTask : TASK_LABELS[topTask as TaskType]?.en || topTask;
+                    // 最活跃时段
+                    const hourMap: Record<number, number> = {};
+                    realHistory.forEach(r => { const h = new Date(r.created_at).getHours(); hourMap[h] = (hourMap[h] || 0) + 1; });
+                    const peakH = Number(Object.entries(hourMap).sort((a, b) => Number(b[1]) - Number(a[1]))[0]?.[0] ?? 14);
+                    const peakStr = lang === "zh" ? `${peakH}:00–${peakH+1}:00` : `${peakH < 12 ? peakH+"am" : peakH === 12 ? "12pm" : (peakH-12)+"pm"}`;
+                    // 平均质量分
+                    const scoredRecords = realHistory.filter(r => r.score_clarity != null);
+                    const avgQuality = scoredRecords.length > 0
+                      ? Math.round(scoredRecords.reduce((sum, r) => sum + ((r.score_clarity! + r.score_specificity! + r.score_structure!) / 3), 0) / scoredRecords.length)
+                      : null;
+
+                    const insightText = lang === "zh"
+                      ? `你最常优化的是 ${topTaskLabel} 类任务，高峰期在 ${peakStr}${avgQuality !== null ? `，Prompt 平均质量分达到 ${avgQuality}` : ""}。${realStats.streak >= 3 ? ` 连续 ${realStats.streak} 天使用中，保持得不错 🔥` : ""}`
+                      : `You mostly optimize ${topTaskLabel} prompts, peak usage at ${peakStr}${avgQuality !== null ? `, avg quality score ${avgQuality}` : ""}. ${realStats.streak >= 3 ? `${realStats.streak}-day streak — keep it up 🔥` : ""}`;
+
+                    return (
+                      <div className="bg-gradient-to-br from-[#ede9fe] to-[#f0f0fe] border border-[#ddd6fe] rounded-xl p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-[#6366f1]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                            <Lightbulb size={15} className="text-[#6366f1]" />
+                          </div>
+                          <div>
+                            <p className="text-[11.5px] text-[#6366f1] mb-1" style={{ fontWeight: 600 }}>
+                              {lang === "zh" ? "你的 AI 使用洞察" : "Your AI Insight"}
+                            </p>
+                            <p className="text-[12.5px] text-[#3f3f6a]" style={{ lineHeight: "1.6" }}>
+                              {insightText}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── 发送周报按钮（调用 Worker HTML 邮件）── */}
+                  {(() => {
+                    const [reportSending, setReportSending] = useState(false);
+                    const [reportSent, setReportSent] = useState(false);
+
+                    const handleSendReport = async () => {
+                      if (!user?.email || reportSending) return;
+                      setReportSending(true);
+                      try {
+                        // 计算统计数据
+                        const topPlatform = (() => {
+                          const countMap: Record<string, number> = {};
+                          realHistory.forEach(r => {
+                            const p = r.platform && r.platform !== "any" ? r.platform : (lang === "zh" ? "其他" : "Other");
+                            countMap[p] = (countMap[p] || 0) + 1;
+                          });
+                          return Object.entries(countMap).sort((a,b) => b[1]-a[1])[0]?.[0] || "-";
+                        })();
+                        const taskCount: Record<string, number> = {};
+                        realHistory.forEach(r => { const tt = r.task_type || "general"; taskCount[tt] = (taskCount[tt] || 0) + 1; });
+                        const topTask = Object.entries(taskCount).sort((a,b) => b[1]-a[1])[0]?.[0] || "general";
+                        const topTaskLabel = lang === "zh" ? TASK_LABELS[topTask as TaskType]?.zh || topTask : TASK_LABELS[topTask as TaskType]?.en || topTask;
                         const hourMap: Record<number, number> = {};
-                        realHistory.forEach(r => {
-                          const h = new Date(r.created_at).getHours();
-                          hourMap[h] = (hourMap[h] || 0) + 1;
-                        });
-                        const sorted = Object.entries(hourMap).sort((a,b) => b[1]-a[1]);
-                        const h = Number(sorted[0]?.[0] ?? 14);
-                        return lang === "zh" ? `${h}:00 - ${h+1}:00` : `${h < 12 ? h+"am" : h === 12 ? "12pm" : (h-12)+"pm"}`;
-                      })();
-
-                      const recentPrompts = realHistory.slice(0, 3).map((r, i) =>
-                        `${i+1}. ${r.original_text.slice(0, 50)}${r.original_text.length > 50 ? "..." : ""}`
-                      ).join("\n");
-
-                      const subject = lang === "zh"
-                        ? `📊 prompt.ai 周报 | ${weekStr}`
-                        : `📊 prompt.ai Weekly Report | ${weekStr}`;
-
-                      const timeSaved = (() => {
+                        realHistory.forEach(r => { const h = new Date(r.created_at).getHours(); hourMap[h] = (hourMap[h] || 0) + 1; });
+                        const peakH = Number(Object.entries(hourMap).sort((a,b) => Number(b[1])-Number(a[1]))[0]?.[0] ?? 14);
+                        const peakStr = lang === "zh" ? `${peakH}:00 – ${peakH+1}:00` : `${peakH < 12 ? peakH+"am" : peakH === 12 ? "12pm" : (peakH-12)+"pm"}`;
+                        const scoredRecords = realHistory.filter(r => r.score_clarity != null);
+                        const avgQuality = scoredRecords.length > 0
+                          ? Math.round(scoredRecords.reduce((sum, r) => sum + ((r.score_clarity! + r.score_specificity! + r.score_structure!) / 3), 0) / scoredRecords.length)
+                          : null;
                         const mins = realStats.totalPrompts * 5;
-                        if (mins < 60) return lang === "zh" ? `${mins} 分钟` : `${mins} min`;
-                        const h = (mins / 60).toFixed(1).replace(/\.0$/, "");
-                        return lang === "zh" ? `${h} 小时` : `${h}h`;
-                      })();
+                        const timeSavedStr = mins < 60 ? (lang === "zh" ? `${mins} 分钟` : `${mins} min`) : (lang === "zh" ? `${(mins/60).toFixed(1).replace(/\.0$/,"")} 小时` : `${(mins/60).toFixed(1).replace(/\.0$/,"")}h`);
+                        const recentPrompts = realHistory.slice(0, 5).map(r => r.original_text.slice(0, 60) + (r.original_text.length > 60 ? "..." : ""));
 
-                      const body = lang === "zh" ? `
-Hi ${user?.user_metadata?.full_name || "你"},
-
-这是你本周的 prompt.ai 使用报告 👋
-
-━━━━━━━━━━━━━━━━━━━━━━
-📈 使用概览
-━━━━━━━━━━━━━━━━━━━━━━
-• 累计优化 Prompt：${realStats.totalPrompts} 条
-• 节省时间（估算）：${timeSaved}
-• 连续使用天数：${realStats.streak} 天
-• 最常用 AI 平台：${topPlatform}
-• 最活跃时段：${peakHour}
-
-━━━━━━━━━━━━━━━━━━━━━━
-🕐 最近优化的 Prompt
-━━━━━━━━━━━━━━━━━━━━━━
-${recentPrompts || "暂无记录"}
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-继续加油！更好的 prompt = 更好的 AI 输出 🚀
-
-— prompt.ai 团队
-                      `.trim() : `
-Hi ${user?.user_metadata?.full_name || "there"},
-
-Here's your prompt.ai weekly report 👋
-
-━━━━━━━━━━━━━━━━━━━━━━
-📈 Usage Overview
-━━━━━━━━━━━━━━━━━━━━━━
-• Total Prompts Optimized: ${realStats.totalPrompts}
-• Time Saved (est.): ${timeSaved}
-• Day Streak: ${realStats.streak} days
-• Most Used AI: ${topPlatform}
-• Peak Hours: ${peakHour}
-
-━━━━━━━━━━━━━━━━━━━━━━
-🕐 Recent Prompts
-━━━━━━━━━━━━━━━━━━━━━━
-${recentPrompts || "No records yet"}
-
-━━━━━━━━━━━━━━━━━━━━━━
-
-Keep it up! Better prompts = Better AI outputs 🚀
-
-— prompt.ai Team
-                      `.trim();
-
-                      const mailto = `mailto:${user?.email || ""}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-                      window.open(mailto);
+                        await fetch("https://prompt-optimizer-api.prompt-optimizer.workers.dev/send-report", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            email: user.email,
+                            name: user.user_metadata?.full_name || user.email?.split("@")[0] || "there",
+                            lang,
+                            stats: {
+                              totalPrompts: realStats.totalPrompts,
+                              streak: realStats.streak,
+                              timeSaved: timeSavedStr,
+                              topPlatform,
+                              topTask: topTaskLabel,
+                              peakHour: peakStr,
+                              avgQuality,
+                            },
+                            recentPrompts,
+                          }),
+                        });
+                        setReportSent(true);
+                        setTimeout(() => setReportSent(false), 4000);
+                      } catch {
+                        // fallback: mailto
+                        window.open(`mailto:${user.email}?subject=${encodeURIComponent(lang === "zh" ? "📊 prompt.ai 周报" : "📊 prompt.ai Weekly Report")}`);
+                      } finally {
+                        setReportSending(false);
+                      }
                     };
 
                     return (
                       <button
                         onClick={handleSendReport}
-                        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border border-[#e8e8ec] text-[13px] text-[#5a5a72] hover:text-[#18181b] hover:border-[#18181b] hover:bg-[#fafafa] transition-all"
+                        disabled={reportSending || reportSent}
+                        className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg border text-[13px] transition-all ${
+                          reportSent
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-600"
+                            : reportSending
+                              ? "border-[#e8e8ec] text-[#c0c0cc] cursor-not-allowed"
+                              : "border-[#e8e8ec] text-[#5a5a72] hover:text-[#18181b] hover:border-[#18181b] hover:bg-[#fafafa]"
+                        }`}
                         style={{ fontWeight: 500 }}
                       >
-                        <MessageSquare size={13} />
-                        {lang === "zh" ? "发送周报到邮箱" : "Send Weekly Report"}
+                        {reportSent ? <Check size={13} /> : <MessageSquare size={13} />}
+                        {reportSent
+                          ? (lang === "zh" ? "周报已发送 ✓" : "Report Sent ✓")
+                          : reportSending
+                            ? (lang === "zh" ? "发送中..." : "Sending...")
+                            : (lang === "zh" ? "发送周报到邮箱" : "Send Weekly Report")}
                       </button>
                     );
                   })()}

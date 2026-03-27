@@ -307,6 +307,164 @@ export default {
 
     const url = new URL(request.url);
 
+    // ─── /send-report 路由：发送 HTML 周报邮件 ───────────────
+    if (url.pathname === "/send-report") {
+      if (request.method !== "POST") {
+        return new Response(JSON.stringify({ error: "Method not allowed" }), {
+          status: 405, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        const { email, name, lang = "zh", stats = {}, recentPrompts = [] } = await request.json();
+        if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          return new Response(JSON.stringify({ error: "Invalid email" }), {
+            status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+          });
+        }
+
+        const isZh = lang === "zh";
+        const displayName = name || (isZh ? "你" : "there");
+        const {
+          totalPrompts = 0,
+          streak = 0,
+          timeSaved = isZh ? "—" : "—",
+          topPlatform = isZh ? "—" : "—",
+          topTask = isZh ? "—" : "—",
+          peakHour = isZh ? "—" : "—",
+          avgQuality = null,
+        } = stats;
+
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}/${now.getMonth()+1}/${now.getDate()}`;
+
+        const recentList = recentPrompts.slice(0, 5).map((p, i) =>
+          `<li style="color:#52525b;padding:6px 0;border-bottom:1px solid #f0f0f4;">${i+1}. ${p}</li>`
+        ).join("");
+
+        const subject = isZh ? `📊 prompt.ai 周报 · ${dateStr}` : `📊 prompt.ai Weekly Report · ${dateStr}`;
+
+        const html = `<!DOCTYPE html>
+<html>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f4f4f6;margin:0;padding:32px 16px;">
+  <div style="max-width:540px;margin:0 auto;">
+    <!-- Header -->
+    <div style="background:#18181b;border-radius:16px 16px 0 0;padding:28px 32px 24px;">
+      <div style="font-family:Georgia,serif;font-size:1.3rem;color:#fff;margin-bottom:4px;">
+        prompt<span style="color:#8b5cf6;">.</span>ai
+      </div>
+      <h1 style="font-size:1.5rem;color:#fff;margin:8px 0 0;font-weight:700;line-height:1.3;">
+        ${isZh ? `${displayName}的周报 📊` : `${displayName}'s Weekly Report 📊`}
+      </h1>
+      <p style="color:#a1a1aa;font-size:0.85rem;margin:8px 0 0;">${dateStr}</p>
+    </div>
+
+    <!-- Stats Grid -->
+    <div style="background:#fff;padding:24px 32px;border-left:1px solid #e4e4e7;border-right:1px solid #e4e4e7;">
+      <p style="color:#8b8b9e;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin:0 0 16px;">
+        ${isZh ? "📈 使用概览" : "📈 Usage Overview"}
+      </p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px;">
+        <div style="background:#fafafa;border:1px solid #e8e8ec;border-radius:12px;padding:16px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#18181b;">${totalPrompts}</div>
+          <div style="font-size:0.8rem;color:#8b8b9e;margin-top:2px;">${isZh ? "累计优化条数" : "Total Optimized"}</div>
+        </div>
+        <div style="background:#fafafa;border:1px solid #e8e8ec;border-radius:12px;padding:16px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#18181b;">${streak}${isZh ? "天" : "d"}</div>
+          <div style="font-size:0.8rem;color:#8b8b9e;margin-top:2px;">${isZh ? "连续使用" : "Day Streak"}</div>
+        </div>
+        <div style="background:#fafafa;border:1px solid #e8e8ec;border-radius:12px;padding:16px;">
+          <div style="font-size:1.2rem;font-weight:700;color:#18181b;">${timeSaved}</div>
+          <div style="font-size:0.8rem;color:#8b8b9e;margin-top:2px;">${isZh ? "节省时间（估算）" : "Time Saved (est.)"}</div>
+        </div>
+        ${avgQuality !== null ? `<div style="background:#ede9fe;border:1px solid #ddd6fe;border-radius:12px;padding:16px;">
+          <div style="font-size:1.6rem;font-weight:700;color:#6366f1;">${avgQuality}</div>
+          <div style="font-size:0.8rem;color:#7c6fc4;margin-top:2px;">${isZh ? "平均质量分" : "Avg Quality"}</div>
+        </div>` : `<div style="background:#fafafa;border:1px solid #e8e8ec;border-radius:12px;padding:16px;">
+          <div style="font-size:1.2rem;font-weight:700;color:#18181b;">${topPlatform}</div>
+          <div style="font-size:0.8rem;color:#8b8b9e;margin-top:2px;">${isZh ? "最常用 AI" : "Top AI"}</div>
+        </div>`}
+      </div>
+
+      <!-- Habits Row -->
+      <div style="background:#f8f7ff;border:1px solid #e9e8fe;border-radius:12px;padding:16px;margin-bottom:20px;">
+        <p style="color:#6366f1;font-size:0.78rem;font-weight:600;margin:0 0 10px;">
+          ${isZh ? "✦ 你的 AI 使用习惯" : "✦ Your AI Habits"}
+        </p>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+            <span style="color:#52525b;">${isZh ? "最擅长任务" : "Top Task Type"}</span>
+            <span style="color:#18181b;font-weight:600;">${topTask}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+            <span style="color:#52525b;">${isZh ? "最常用平台" : "Fav Platform"}</span>
+            <span style="color:#18181b;font-weight:600;">${topPlatform}</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:0.85rem;">
+            <span style="color:#52525b;">${isZh ? "活跃高峰" : "Peak Hours"}</span>
+            <span style="color:#18181b;font-weight:600;">${peakHour}</span>
+          </div>
+        </div>
+      </div>
+
+      ${recentList ? `<!-- Recent Prompts -->
+      <p style="color:#8b8b9e;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;font-weight:600;margin:0 0 12px;">
+        ${isZh ? "🕐 最近优化的 Prompt" : "🕐 Recent Prompts"}
+      </p>
+      <ul style="margin:0;padding-left:0;list-style:none;">
+        ${recentList}
+      </ul>` : ""}
+    </div>
+
+    <!-- Footer CTA -->
+    <div style="background:#18181b;border-radius:0 0 16px 16px;padding:24px 32px;text-align:center;">
+      <p style="color:#a1a1aa;font-size:0.85rem;margin:0 0 16px;">
+        ${isZh ? "更好的 prompt = 更好的 AI 输出 🚀" : "Better prompts = Better AI outputs 🚀"}
+      </p>
+      <a href="https://prompt-ai.work" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;padding:10px 24px;border-radius:8px;font-size:0.9rem;font-weight:600;">
+        ${isZh ? "打开 prompt.ai" : "Open prompt.ai"}
+      </a>
+      <p style="color:#52525b;font-size:0.75rem;margin:16px 0 0;">
+        prompt<span style="color:#8b5cf6;">.</span>ai Team · <a href="mailto:lisayyyin@qq.com" style="color:#8b8b9e;text-decoration:none;">lisayyyin@qq.com</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+        const emailRes = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${env.RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: "prompt.ai <hi@prompt-ai.work>",
+            to: [email],
+            subject,
+            html,
+          }),
+        });
+
+        if (!emailRes.ok) {
+          const errText = await emailRes.text();
+          console.error("Resend error:", errText);
+          return new Response(JSON.stringify({ error: "Email send failed" }), {
+            status: 502, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        console.error("Send report error:", err);
+        return new Response(JSON.stringify({ error: "Server error" }), {
+          status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // ─── /waitlist 路由 ────────────────────────────────────
     if (url.pathname === "/waitlist") {
       if (request.method !== "POST") {
