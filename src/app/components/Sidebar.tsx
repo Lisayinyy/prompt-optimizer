@@ -614,6 +614,8 @@ export default function Sidebar() {
     streak: number;
   };
   const [realStats, setRealStats] = useState<RealStats>({ totalPrompts: 0, streak: 0 });
+  const [reportSending, setReportSending] = useState(false);
+  const [reportSent, setReportSent] = useState(false);
 
   const fetchStats = async () => {
     if (!user) return;
@@ -2281,9 +2283,6 @@ export default function Sidebar() {
 
                   {/* ── 发送周报按钮（调用 Worker HTML 邮件）── */}
                   {(() => {
-                    const [reportSending, setReportSending] = useState(false);
-                    const [reportSent, setReportSent] = useState(false);
-
                     const handleSendReport = async () => {
                       if (!user?.email || reportSending) return;
                       setReportSending(true);
